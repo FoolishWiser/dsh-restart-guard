@@ -2,6 +2,7 @@
 
 [![ci](https://github.com/FoolishWiser/dsh-restart-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/FoolishWiser/dsh-restart-guard/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/dsh-restart-guard.svg)](https://www.npmjs.com/package/dsh-restart-guard)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](package.json)
 [![dependencies](https://img.shields.io/badge/runtime%20deps-0-brightgreen.svg)](package.json)
 

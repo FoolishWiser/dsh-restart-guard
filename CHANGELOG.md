@@ -6,6 +6,11 @@ All notable changes are documented here. The format follows Keep a Changelog, ve
 
 First public release.
 
+### Fixed
+
+- `bin` used `./lib/cli.mjs`; npm rewrites that during publish and warns, so the path is now `lib/cli.mjs`.
+- `files` now ships `dsh-restart-guard.bundle.yml`; without it a published install had no bundle patch and `dsh plugin add` could not activate the plugin.
+
 ### Added
 
 - **Detached watcher** that outlives the DSH host: a crash, `kill -9` or a failed restart is detected within `probeIntervalMs` and repaired.

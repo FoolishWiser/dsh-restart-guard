@@ -4,3 +4,6 @@ lib/client.js.tmp
 .DS_Store
 dist/
 coverage/
+
+# packed tarballs
+*.tgz
