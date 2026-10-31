@@ -5,7 +5,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { DEFAULTS } from '../lib/shared/config.js'
+import { DEFAULTS, normalizeConfig } from '../lib/shared/config.js'
+import { readJson } from '../lib/shared/paths.js'
 import {
   detectMaintenance,
   detectRestarters,
@@ -82,7 +83,8 @@ test('detectMaintenance honours an explicit window and the grace period', () => 
   })
   assert.equal(explicit.active, true)
   assert.equal(explicit.signal, 'explicit')
-  assert.ok((explicit.until ?? 0) >= now + DEFAULTS.maintenance.graceMs)
+  assert.equal(explicit.until, now + 60_000, 'an explicit window is honoured as written, not padded with grace')
+  assert.ok((DEFAULTS.maintenance.graceMs ?? 0) > 0)
   assert.equal(explicit.treeIntact, true)
 
   const expired = detectMaintenance({ now, config: DEFAULTS, env: { DSH_HOME: home }, instance, explicit: { until: now - 1 } })
@@ -151,4 +153,29 @@ test('detectRestarters finds a process whose command line matches', async () => 
   } finally {
     child.kill('SIGTERM')
   }
+})
+
+test('a lingering restarter keeps its anchored window instead of sliding it', async () => {
+  const home = tmpHome()
+  const profileDir = path.join(home, 'profiles', 'web')
+  fs.mkdirSync(profileDir, { recursive: true })
+  const tree = fakeTree(home)
+  fs.writeFileSync(path.join(profileDir, 'cordis.patch.yml'), '[]\n')
+  const config = normalizeConfig({ maintenance: { autoDetect: false } }).config
+  const explicit = { until: Date.now() + 60_000, reason: 'drill' }
+  const base = {
+    config,
+    env: { DSH_HOME: home },
+    instance: { dir: path.join(home, 'guard'), hostPid: 0, pkgRoot: tree.pkgRoot, profileDir, binPath: tree.binPath, baseline: readJson(path.join(home, 'baseline.json'), null) },
+    explicit,
+  }
+  const first = detectMaintenance({ ...base, now: Date.now() })
+  assert.equal(first.active, true)
+  const anchor = first.until
+  const later = detectMaintenance({
+    ...base,
+    now: Date.now() + 5000,
+    previous: { signal: first.signal, until: Number(first.until) },
+  })
+  assert.equal(later.until, anchor, 'the same signal must not extend the window')
 })

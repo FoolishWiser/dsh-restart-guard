@@ -1,3 +1,18 @@
+## [0.1.4] — 2026-10-31
+
+### Fixed
+
+- Maintenance mode notified on every probe tick while the host was down: the
+  maintenance branch used the incident-scoped dedupe map, which never exists
+  during a maintenance window. It now dedupes on the signal set and clears the
+  marker when the window ends.
+- The maintenance deadline slid forward on every probe (`now + graceMs`), so a
+  lingering restarter kept extending the window and changed the message each
+  time. Windows are now anchored: the same signal keeps its original deadline,
+  and explicit windows end exactly when asked.
+- `appendOutbox` collapses identical reports for ten minutes, so a queue
+  accumulated while the host was down cannot flood a channel on replay.
+
 ## [0.1.3] — 2026-10-31
 
 ### Added
