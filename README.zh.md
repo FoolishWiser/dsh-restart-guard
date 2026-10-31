@@ -127,11 +127,14 @@ dsh-restart-guard logs -f     # 跟随守护日志
     "command": { "enabled": false, "program": "", "args": [] },
     "im": { "enabled": false, "botId": "", "targetId": "", "format": "markdown" }
   },
+  "supervision": { "mode": "auto" },
   "security": { "allowRemoteMutations": false, "dangerousActions": false }
 }
 ```
 
 `bootLogPath` 通常不需要：宿主健康时守护会从 `/proc/<pid>/fd/1` 抓真实 stdout。若启动器把 stdout 接成管道，再手动指定。
+
+`supervision.mode` 决定“谁负责重启”：`auto`（默认）识别 systemd、pm2、supervisord 和容器；`none` 表示没有别的程序会重启 DSH，让守护照常动手（适合 CI，或 PID 1 是 systemd 但平台并不会重启服务的容器）；`supervised` 表示只报告、不动手，用于检测不到真正归属者的场景。
 
 - 状态目录 `$DSH_HOME/restart-guard/` 必须能跨重启保留。
 - 已有 systemd/pm2 等 supervisor 时，守护只报告，不与 supervisor 抢端口。

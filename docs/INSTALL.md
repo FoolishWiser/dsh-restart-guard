@@ -109,6 +109,7 @@ dsh-restart-guard purge                     # deletes $DSH_HOME/restart-guard
 - Mount/persist `$DSH_HOME` (or at least `$DSH_HOME/restart-guard`) so state survives a container restart.
 - The entrypoint must not `exec` away a parent that would reap the watcher; the watcher is detached and ignores SIGHUP, but a PID-1 that kills the whole process group will take it down. In that case, run the guard from the supervisor instead (see below).
 - If the container platform restarts DSH itself, the guard detects the returning port and waits.
+- If detection cannot tell who owns restarts, set `supervision.mode` explicitly: `"none"` makes the guard act (nobody else will restart DSH), `"supervised"` makes it report only.
 
 ## Under systemd / pm2 / supervisord
 

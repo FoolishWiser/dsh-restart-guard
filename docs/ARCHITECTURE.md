@@ -37,6 +37,8 @@ The host plugin and the watcher never write the same file:
 
 The host starts the watcher with `spawn(node, [watcher.mjs, --home, --profile, --port, --instance], { detached: true, stdio: 'ignore' })` and immediately unrefs it. There is no pipe, no IPC socket, no parent-child signal relationship: killing the host leaves the watcher running, and killing the watcher is repaired by the host on its next 10-second tick (with a spawn budget of 6 per 10 minutes).
 
+Supervision is detected (systemd/pm2 env markers, parent comm, PID 1, container cgroups) and can be overridden with `supervision.mode`: `none` forces "nobody else restarts DSH" (CI, or a container with a foreign init), `supervised` forces report-only.
+
 A single `watcher.lock` (O_EXCL) prevents two watchers for one instance. A live watcher with a different version is replaced (`--replace` → `control/stop` → 500 ms wait) so upgrades converge.
 
 ## Health and readiness

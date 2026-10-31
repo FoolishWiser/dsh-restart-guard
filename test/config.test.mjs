@@ -106,3 +106,9 @@ test('preset list is stable', () => {
     'healthchecks',
   ])
 })
+
+test('supervision mode falls back to auto on nonsense', () => {
+  const { config, issues } = normalizeConfig({ supervision: { mode: 'yolo' } })
+  assert.equal(config.supervision.mode, 'auto')
+  assert.ok(issues.some((issue) => issue.includes('supervision.mode')), 'the bad value is reported')
+})

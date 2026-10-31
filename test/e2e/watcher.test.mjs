@@ -32,16 +32,25 @@ function startWatcher(port, home, dir, sink) {
         crashLoop: { windowMs: 60000, maxIncidents: 3, pauseMs: 60000 },
       },
       maintenance: { autoDetect: false },
+      supervision: { mode: 'none' },
       notify: {
         command: { enabled: true, program: process.execPath, args: [notifySink, sink] },
       },
     },
     { env: { DSH_HOME: home } },
   )
+  // CI runners often run steps under systemd and leak INVOCATION_ID into the
+  // environment; a real deployment would then be "supervised" and the guard
+  // would only report. This test exercises the unsupervised path, so the
+  // supervisor markers are stripped.
+  const childEnv = { ...process.env, DSH_HOME: home }
+  for (const key of ['INVOCATION_ID', 'JOURNAL_STREAM', 'SYSTEMD_EXEC_PID', 'NOTIFY_SOCKET', 'PM2_HOME', 'pm_id', 'pm_exec_path']) {
+    delete childEnv[key]
+  }
   const child = spawn(
     process.execPath,
     [watcherPath, '--home', home, '--profile', 'web', '--port', String(port), '--instance', dir],
-    { env: { ...process.env, DSH_HOME: home }, stdio: 'ignore' },
+    { env: childEnv, stdio: 'ignore' },
   )
   return child
 }

@@ -142,11 +142,14 @@ Global file: `$DSH_HOME/restart-guard/config.json` (mode 0600). Everything can b
     "command": { "enabled": false, "program": "", "args": [] },
     "im": { "enabled": false, "botId": "", "targetId": "", "format": "markdown" }
   },
+  "supervision": { "mode": "auto" },
   "security": { "allowRemoteMutations": false, "dangerousActions": false }
 }
 ```
 
 `bootLogPath` is usually unnecessary: the guard captures the real stdout from `/proc/<pid>/fd/1` while the host is healthy. Set it if stdout is a pipe (for example, a launcher that captures output itself).
+
+`supervision.mode` controls who is assumed to own restarts: `auto` (default) sniffs systemd, pm2, supervisord and containers; `none` tells the guard nobody else will restart DSH, so it acts even if the environment looks managed (useful in CI, or a container whose PID 1 is systemd but which does not restart the server); `supervised` forces report-only when detection cannot see the real owner.
 
 ### Scheduled / container deployments
 

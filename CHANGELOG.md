@@ -19,6 +19,7 @@ First public release.
 - **Settings page**: environment report with actionable hints, notification fields with a test button, watchdog policy, dangerous-actions guard, incident list, auto refresh.
 - **CLI**: `status`, `doctor`, `logs`, `incidents`, `outbox`, `restart`, `rollback`, `start`, `simulate-crash`, `pause`, `resume`, `notify-test`, `maintenance`, `reload`, `ai-test`, `install`, `uninstall`, `purge`, `version`.
 - **AI-assisted repair** (optional, off by default): a model may answer with one of `retry`, `rollback-patch`, `wait`, `manual`, and the verdict is mapped onto the existing allow-listed actions. It is only consulted when the rule-based ladder would stop at `manual`; it can never override maintenance, incomplete-tree, supervisor or foreign-holder stops, and it cannot introduce commands.
+- **Supervision override**: `supervision.mode` (`auto`/`none`/`supervised`) when detection cannot see who owns restarts (CI, containers with a foreign init).
 - **Security**: per-boot guard token injected into the app shell, POST-only allow-listed mutations with a 64 KiB body cap, remote mutation refusal, `O_NOFOLLOW` appends, `0700/0600` state, secret redaction, no runtime dependencies.
 - **Tests**: 85 tests including end-to-end repairs against a fake `dsh web`, slow-host, crash-loop, maintenance and AI verdict cases.
 
