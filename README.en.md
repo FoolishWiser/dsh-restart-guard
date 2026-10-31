@@ -111,7 +111,9 @@ The verdict is mapped onto the existing allow-listed actions — the guard never
 - `rollback-patch` only applies when a backup exists and no rollback was tried yet;
 - if the call fails (no key, timeout, HTTP error, bad JSON) the rule-based decision stands and `ai-unavailable` is logged.
 
-Enable it under **Settings → Restart guard → AI-assisted repair**, set the provider (`deepseek`, `openai` or a custom OpenAI-compatible endpoint), the model, and the **name of an environment variable** holding the key (default `DEEPSEEK_API_KEY`; the key itself is never written to the config). Use **Test AI** to check the wiring; `dsh-restart-guard ai-test` does the same from a shell. The prompts and responses are not logged beyond the verdict summary, and no data leaves the machine unless you turn this on.
+Enable it under **Settings → Restart guard → AI-assisted repair**, set the provider (`deepseek`, `openai` or a custom OpenAI-compatible endpoint), the model and where the key comes from. **By default the guard borrows the harness's own credential**: it reads the `refs:` block of `$DSH_HOME/.credentials.yaml` (`DEEPSEEK_API_KEY`, `XIAOMI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), so the second opinion keeps working while `dsh web` itself is down. Set `ai.credentialSource` to `env`, `dsh` or `none` to narrow that, or name one credential with `ai.keyRef`. Keys are read-only, never written to the config and never logged.
+
+If you would rather not have the guard call a model API directly, enable **bridging** (`ai.bridge`): the prompt goes to a program's stdin and the same JSON verdict comes back on stdout — for example a small wrapper around `dsh headless`. The bridge is used only when it is enabled. Use **Test AI** to check the wiring; `dsh-restart-guard ai-test` does the same from a shell. The prompts and responses are not logged beyond the verdict summary, and no data leaves the machine unless you turn this on.
 
 ### What is *not* repaired automatically
 
@@ -143,8 +145,12 @@ Global file: `$DSH_HOME/restart-guard/config.json` (mode 0600). Everything can b
   },
   "maintenance": { "autoDetect": true, "graceMs": 900000, "lookbackMs": 1800000 },
   "readiness": { "accessLine": "dsh web:", "fatalPatterns": ["failed to mount", "Cannot find module"] },
-  "logs": { "bootLogPath": "" },
-  "ai": { "enabled": false, "preset": "deepseek", "endpoint": "", "model": "", "keyEnv": "DEEPSEEK_API_KEY" },
+  "logs": { "bootLogPath": "", "mirrorToHostLog": true },
+  "ai": {
+    "enabled": false, "preset": "deepseek", "endpoint": "", "model": "",
+    "keyEnv": "DEEPSEEK_API_KEY", "keyRef": "", "credentialSource": "auto",
+    "bridge": { "enabled": false, "program": "", "args": [] }
+  },
   "notify": {
     "webhook": { "enabled": false, "preset": "generic", "url": "" },
     "command": { "enabled": false, "program": "", "args": [] },
@@ -156,6 +162,8 @@ Global file: `$DSH_HOME/restart-guard/config.json` (mode 0600). Everything can b
 ```
 
 `bootLogPath` is usually unnecessary: the guard captures the real stdout from `/proc/<pid>/fd/1` while the host is healthy. Set it if stdout is a pipe (for example, a launcher that captures output itself).
+
+`logs.mirrorToHostLog` (default `true`) echoes every guard line into the host's own stdout (the `bootLogPath` or the captured stdout file) behind a `[dsh-restart-guard] ` prefix. In a container that means `docker logs` shows who is repairing what without opening a shell; the prefix cannot be mistaken for the server's own access line.
 
 `supervision.mode` controls who is assumed to own restarts: `auto` (default) sniffs systemd, pm2, supervisord and containers; `none` tells the guard nobody else will restart DSH, so it acts even if the environment looks managed (useful in CI, or a container whose PID 1 is systemd but which does not restart the server); `supervised` forces report-only when detection cannot see the real owner.
 

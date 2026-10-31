@@ -32,7 +32,7 @@ DSH 宿主 (dsh web)                     独立 watcher
 - **有边界的修复阶梯**：用抓到的 argv/env/cwd 重启；把 `cordis.patch.yml` 回滚到**能通过 `--dump-config` 的最新备份**；或者停下并把证据交给人。每个事件最多启动 2 次；10 分钟 3 次崩溃进入 30 分钟暂停，避免重启风暴。
 - **升级/维护期免误判**：显式维护窗口、包树 inode/版本变化、`<pkgRoot>.prev-*` 等兄弟目录、包管理器进程、`$DSH_HOME/upgrade` 最新目录、慢启动六路信号任一命中即进入维护态：**不启动、不回滚、不杀进程**。
 - **尊重主动停止**：宿主 `exit(0)` 被当作“操作者有意停的”，不拉起。
-- **通知到你所在的地方**：本地日志恒开；Webhook（飞书、企业微信、钉钉、Slack、Telegram、Discord、ntfy、healthchecks、通用 JSON）；任意命令（argv 直传、消息走 stdin）；`dsh-im` 插件（宿主不在线时先落盘，回来后补发）。
+- **通知到你所在的地方**：本地日志恒开；Webhook（飞书、企业微信、钉钉、Slack、Telegram、Discord、ntfy、healthchecks、通用 JSON）；任意命令（argv 直传、消息走 stdin）；`dsh-im` 插件（宿主不在线时先落盘，回来后补发）。设置页点“扫描 dsh-im”可直接从已装插件里列出 bot 与 target，不用手抄 ID。
 - **装完就告诉你环境缺什么**：设置页顶部有体检卡（启动日志、patch 备份、Webhook/IM、监督者、维护态），每个缺口都给出可操作提示；另有一键“模拟崩溃”演练。
 - **可选 AI 辅助判定**：规则确实没有安全动作时才征询模型，模型只能选“重试 / 回滚 patch / 等待 / 人工”，不会执行任何命令（详见下文）。
 
@@ -104,7 +104,11 @@ dsh-restart-guard logs -f     # 跟随守护日志
 
 判定会被映射到**已有的白名单动作**上，模型输出不会被当作命令执行。此外：维护窗口/包树不完整/有监督者/陌生端口占用这类硬停不会被覆盖；置信度低于 `0.5` 视为人工处理；非 DSH 进程占端口时拒绝 `retry`；`rollback-patch` 仅在存在备份且本次事件尚未回滚时可用；调用失败（没有 key、超时、HTTP 错误、JSON 不合法）时保留规则结论并记 `ai-unavailable`。
 
-在 **设置 → 重启守护 → AI 辅助修复** 里开启，选择服务商（`deepseek` / `openai` / 自定义 OpenAI 兼容端点）、模型、以及存放密钥的**环境变量名**（默认 `DEEPSEEK_API_KEY`；密钥本身不会写进配置）。点 **测试 AI** 验证链路，命令行等价命令是 `dsh-restart-guard ai-test`。不开启就不会有任何数据外发。
+在 **设置 → 重启守护 → AI 辅助修复** 里开启，选择服务商（`deepseek` / `openai` / 自定义 OpenAI 兼容端点）、模型、以及密钥来源。**密钥默认直接借用 DSH 自己的**：守护会读 `$DSH_HOME/.credentials.yaml` 的 `refs:` 块（`DEEPSEEK_API_KEY`、`XIAOMI_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`），所以即使 `dsh web` 本身起不来，第二意见仍然可用；也可以改成只读环境变量（`ai.credentialSource: "env"`）、只读 DSH 凭据库（`"dsh"`）或指定某个凭据名（`ai.keyRef`）。密钥只读、不写进配置、不落日志。
+
+如果不想让守护直接连模型 API，可以开**桥接**（`ai.bridge`）：它把提示词写到某个程序的 stdin，从 stdout 读同一种 JSON 判定，例如包一层 `dsh headless`。注意：`callAi` 只有在桥接开启时才走桥，否则走 HTTP。
+
+点 **测试 AI** 验证链路，命令行等价命令是 `dsh-restart-guard ai-test`。不开启就不会有任何数据外发。
 
 ## 配置
 
@@ -128,8 +132,12 @@ dsh-restart-guard logs -f     # 跟随守护日志
     "crashLoop": { "windowMs": 600000, "maxIncidents": 3, "pauseMs": 1800000 }
   },
   "maintenance": { "autoDetect": true, "graceMs": 900000, "lookbackMs": 1800000 },
-  "logs": { "bootLogPath": "" },
-  "ai": { "enabled": false, "preset": "deepseek", "endpoint": "", "model": "", "keyEnv": "DEEPSEEK_API_KEY" },
+  "logs": { "bootLogPath": "", "mirrorToHostLog": true },
+  "ai": {
+    "enabled": false, "preset": "deepseek", "endpoint": "", "model": "",
+    "keyEnv": "DEEPSEEK_API_KEY", "keyRef": "", "credentialSource": "auto",
+    "bridge": { "enabled": false, "program": "", "args": [] }
+  },
   "notify": {
     "webhook": { "enabled": false, "preset": "generic", "url": "" },
     "command": { "enabled": false, "program": "", "args": [] },
@@ -141,6 +149,8 @@ dsh-restart-guard logs -f     # 跟随守护日志
 ```
 
 `bootLogPath` 通常不需要：宿主健康时守护会从 `/proc/<pid>/fd/1` 抓真实 stdout。若启动器把 stdout 接成管道，再手动指定。
+
+`logs.mirrorToHostLog`（默认 `true`）：守护把自己的日志行以 `[dsh-restart-guard] ` 前缀**追加进宿主的 stdout**（即 `bootLogPath` 或抓到的 stdout 文件），所以容器部署时 `docker logs <container>` 里能直接看到“谁在修、修到哪一步”，不必再进容器翻 `$DSH_HOME/restart-guard/`。它只写这一行前缀，不会伪造 DSH 自己的访问行，就绪判定不受影响。
 
 `supervision.mode` 决定“谁负责重启”：`auto`（默认）识别 systemd、pm2、supervisord 和容器；`none` 表示没有别的程序会重启 DSH，让守护照常动手（适合 CI，或 PID 1 是 systemd 但平台并不会重启服务的容器）；`supervised` 表示只报告、不动手，用于检测不到真正归属者的场景。
 

@@ -2,6 +2,19 @@
 
 All notable changes are documented here. The format follows Keep a Changelog, versions follow SemVer.
 
+## [0.1.2] — 2026-10-31
+
+### Added
+
+- **AI repair can borrow the harness's own credential**: `$DSH_HOME/.credentials.yaml` `refs:` is read when no key is in the environment (`ai.credentialSource`: `auto`/`env`/`dsh`/`none`, plus `ai.keyRef`), so the second opinion still works while `dsh web` itself is down.
+- **Bridge transport** (`ai.bridge`): the prompt goes to a program's stdin and the JSON verdict comes back on stdout — no model endpoint needed from the guard's side.
+- **IM discovery**: `GET /api/restart-guard/im` lists `dsh-im` bots and targets; the settings page offers pickers and the doctor cross-checks the configured bot/target.
+- **Container log mirroring** (`logs.mirrorToHostLog`, default on): guard lines are echoed into the host's stdout as `[dsh-restart-guard] …`, so repairs show up in `docker logs` while the server is down.
+
+### Fixed
+
+- **Watcher handover could kill itself**: a successor started with `--replace` inherited the previous watcher's `stop` control and exited immediately, so the host respawned it every ten seconds. The successor now clears that handover stop, the version string is read from `package.json`, and `ensureWatcher()` only replaces a watcher whose on-disk version differs (throttled to once per ten minutes).
+
 ## [0.1.0] — 2026-10-31
 
 First public release.

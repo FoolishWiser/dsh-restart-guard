@@ -55,6 +55,15 @@ const zh = {
   commandEnabled: '启用命令渠道',
   im: 'IM（dsh-im）',
   imEnabled: '启用 IM 通知',
+  imScan: '扫描 dsh-im',
+  imScanning: '扫描中…',
+  imPickBot: '选择 Bot',
+  imPickTarget: '选择 Target',
+  imScanHint: '从 dsh-im 读取 bot 与 target；也可继续手填。',
+  aiCredentialSource: '密钥来源',
+  aiKeyRef: '凭据名（可选）',
+  aiBridge: '用外部程序桥接',
+  aiBridgeProgram: '桥接程序（stdin 收提示，stdout 回 JSON）',
   imBot: 'botId',
   imTarget: 'targetId',
   imHint: '在 设置 → IM Bot 里复制 botId；targetId 由你自定义。dsh-im 不在线时先落盘，等 DSH 回来后补发。',
@@ -139,6 +148,15 @@ const en = {
   commandEnabled: 'Enable command channel',
   im: 'IM (dsh-im)',
   imEnabled: 'Enable IM notifications',
+  imScan: 'Scan dsh-im',
+  imScanning: 'Scanning…',
+  imPickBot: 'Pick a bot',
+  imPickTarget: 'Pick a target',
+  imScanHint: 'Read bots and targets from dsh-im; manual identifiers still work.',
+  aiCredentialSource: 'Key source',
+  aiKeyRef: 'Credential ref (optional)',
+  aiBridge: 'Bridge through a program',
+  aiBridgeProgram: 'Bridge program (prompt on stdin, JSON verdict on stdout)',
   imBot: 'botId',
   imTarget: 'targetId',
   imHint: 'Copy botId from Settings → IM Bot; targetId is yours. If dsh-im is offline the message is queued and replayed when DSH returns.',
@@ -260,6 +278,8 @@ export function Card({ t }) {
   const [advanced, setAdvanced] = useState(false)
   const [incidents, setIncidents] = useState([])
   const [aiResult, setAiResult] = useState('')
+  const [imInfo, setImInfo] = useState(null)
+  const [imBusy, setImBusy] = useState(false)
   const loadedAt = useRef(0)
 
   const load = useCallback(async () => {
@@ -325,6 +345,21 @@ export function Card({ t }) {
       setBusy('')
     }
   }, [])
+
+  const scanIm = useCallback(async () => {
+    setImBusy(true)
+    try {
+      const info = await api('im', { method: 'GET' })
+      setImInfo(info || { available: false, reason: 'no response' })
+    } catch (failure) {
+      setImInfo({ available: false, reason: String(failure.message || failure) })
+    } finally {
+      setImBusy(false)
+    }
+  }, [])
+
+  const imBots = imInfo && Array.isArray(imInfo.bots) ? imInfo.bots : []
+  const imTargets = imInfo && imInfo.targets && imInfo.bots ? imInfo.targets[draft.notify.im.botId] || [] : []
 
   const testAi = useCallback(async () => {
     setBusy('ai-test')
@@ -480,13 +515,40 @@ export function Card({ t }) {
         <Field label={t('imEnabled')}>
           <input type="checkbox" checked={!!draft.notify.im.enabled} onChange={(event) => update('notify.im.enabled', event.target.checked)} />
         </Field>
+        <div style={styles.row}>
+          <button style={styles.button} onClick={scanIm} disabled={imBusy}>
+            {imBusy ? t('imScanning') : t('imScan')}
+          </button>
+          {imInfo && !imInfo.available ? <span style={styles.muted}>{imInfo.reason}</span> : null}
+        </div>
+        {imBots.length > 0 ? (
+          <Field label={t('imPickBot')}>
+            <select style={styles.input} value={draft.notify.im.botId || ''} onChange={(event) => { update('notify.im.botId', event.target.value); update('notify.im.targetId', '') }}>
+              <option value="">—</option>
+              {imBots.map((bot) => (
+                <option key={bot.botId} value={bot.botId}>{bot.channel || bot.botId}{bot.connected ? '' : ' (offline)'}</option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
         <Field label={t('imBot')}>
           <input style={styles.input} value={draft.notify.im.botId || ''} onChange={(event) => update('notify.im.botId', event.target.value)} />
         </Field>
+        {imTargets.length > 0 ? (
+          <Field label={t('imPickTarget')}>
+            <select style={styles.input} value={draft.notify.im.targetId || ''} onChange={(event) => update('notify.im.targetId', event.target.value)}>
+              <option value="">—</option>
+              {imTargets.map((target) => {
+                const id = String(target.targetId ?? target.id ?? '')
+                return <option key={id} value={id}>{target.name || target.title || id}</option>
+              })}
+            </select>
+          </Field>
+        ) : null}
         <Field label={t('imTarget')}>
           <input style={styles.input} value={draft.notify.im.targetId || ''} onChange={(event) => update('notify.im.targetId', event.target.value)} />
         </Field>
-        <div style={styles.muted}>{t('imHint')}</div>
+        <div style={styles.muted}>{t('imHint')} {t('imScanHint')}</div>
       </div>
 
       <div style={styles.card}>
@@ -507,9 +569,28 @@ export function Card({ t }) {
         <Field label={t('aiEndpoint')}>
           <input style={styles.input} value={draft.ai.endpoint || ''} placeholder="https://…/chat/completions" onChange={(event) => update('ai.endpoint', event.target.value)} />
         </Field>
+        <Field label={t('aiCredentialSource')}>
+          <select style={styles.input} value={draft.ai.credentialSource || 'auto'} onChange={(event) => update('ai.credentialSource', event.target.value)}>
+            <option value="auto">auto (env → dsh credentials)</option>
+            <option value="env">env only</option>
+            <option value="dsh">dsh credentials only</option>
+            <option value="none">none</option>
+          </select>
+        </Field>
         <Field label={t('aiKeyEnv')}>
           <input style={styles.input} value={draft.ai.keyEnv || ''} placeholder="DEEPSEEK_API_KEY" onChange={(event) => update('ai.keyEnv', event.target.value)} />
         </Field>
+        <Field label={t('aiKeyRef')}>
+          <input style={styles.input} value={draft.ai.keyRef || ''} placeholder="DEEPSEEK_API_KEY" onChange={(event) => update('ai.keyRef', event.target.value)} />
+        </Field>
+        <Field label={t('aiBridge')}>
+          <input type="checkbox" checked={!!draft.ai.bridge?.enabled} onChange={(event) => update('ai.bridge.enabled', event.target.checked)} />
+        </Field>
+        {draft.ai.bridge?.enabled ? (
+          <Field label={t('aiBridgeProgram')}>
+            <input style={styles.input} value={draft.ai.bridge?.program || ''} placeholder="/usr/local/bin/ai-bridge" onChange={(event) => update('ai.bridge.program', event.target.value)} />
+          </Field>
+        ) : null}
         <div style={styles.row}>
           <button style={styles.button} onClick={testAi} disabled={!!busy}>
             {busy === 'ai-test' ? t('aiTesting') : t('aiTest')}

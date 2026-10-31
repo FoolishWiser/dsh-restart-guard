@@ -1,6 +1,9 @@
 // @ts-check
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import http from 'node:http'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 
 import {
@@ -9,6 +12,7 @@ import {
   applyAiVerdict,
   buildAiRequest,
   callAi,
+  callBridge,
   extractJson,
   parseVerdict,
 } from '../lib/shared/ai.js'
@@ -34,7 +38,9 @@ test('ai settings: defaults are off, key comes from the named env var', () => {
   const off = aiSettings(config, {})
   assert.equal(off.enabled, false)
   assert.equal(off.endpoint, AI_PRESETS.deepseek.endpoint)
-  assert.equal(off.apiKey, '')
+  // Default source is auto, so a harness credential store on this machine may
+  // legitimately provide a key; only an env-only config must come up empty.
+  assert.equal(aiSettings({ ai: { credentialSource: 'env' } }, {}).apiKey, '')
 
   const on = aiSettings({ ai: { enabled: true, preset: 'openai' } }, { OPENAI_API_KEY: 'sk-test' })
   assert.equal(on.enabled, true)
@@ -157,4 +163,51 @@ test('applyAiVerdict respects confidence, hard stops and backup availability', (
   assert.equal(rolled.applied, true)
   assert.equal(plan.steps[0].action, 'rollback-patch')
   assert.equal(plan.steps.some((item) => item.action === 'start-dsh'), true)
+})
+
+
+test('the key can come from the harness credential store when the env is empty', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rsg-ai-'))
+  fs.writeFileSync(path.join(home, '.credentials.yaml'), 'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-from-dsh\n')
+  const env = /** @type {any} */ ({ DSH_HOME: home })
+  const envOnly = aiSettings(normalizeConfig({ ai: { enabled: true, credentialSource: 'env' } }).config, env)
+  assert.equal(envOnly.apiKey, '')
+  const enabled = aiSettings(normalizeConfig({ ai: { enabled: true, credentialSource: 'dsh' } }).config, env)
+  assert.equal(enabled.apiKey, 'sk-from-dsh')
+  assert.equal(enabled.keySource, 'dsh-store')
+  assert.equal(enabled.keyName, 'DEEPSEEK_API_KEY')
+
+  const fromEnv = aiSettings(normalizeConfig({ ai: { enabled: true } }).config, { ...env, DEEPSEEK_API_KEY: 'sk-env' })
+  assert.equal(fromEnv.apiKey, 'sk-env')
+  assert.equal(fromEnv.keySource, 'env')
+
+  const none = aiSettings(normalizeConfig({ ai: { enabled: true, credentialSource: 'none' } }).config, env)
+  assert.equal(none.apiKey, '')
+})
+
+test('a bridge program turns a prompt on stdin into a verdict without an endpoint', async () => {
+  const bridged = normalizeConfig({
+    ai: {
+      enabled: true,
+      bridge: {
+        enabled: true,
+        program: process.execPath,
+        args: ['-e', 'process.stdin.resume();process.stdin.on("end",()=>console.log(JSON.stringify({action:"retry",reason:"bridge says retry",hint:"",confidence:0.8})))'],
+      },
+    },
+  }).config
+  const settings = aiSettings(bridged, /** @type {any} */ ({}))
+  assert.equal(settings.bridge.enabled, true)
+  const messages = buildAiRequest({ locale: 'zh', facts: { incident: 'unknown', maxLogBytes: 4096 }, logText: 'boom' }).messages
+  const result = await callAi({ settings, messages })
+  assert.equal(result.ok, true)
+  assert.equal(result.verdict.action, 'retry')
+
+  const broken = aiSettings(
+    normalizeConfig({ ai: { enabled: true, bridge: { enabled: true, program: process.execPath, args: ['-e', 'process.exit(2)'] } } }).config,
+    /** @type {any} */ ({}),
+  )
+  const failed = await callBridge({ settings: broken, messages })
+  assert.equal(failed.ok, false)
+  assert.match(failed.error, /bridge exited 2/)
 })
