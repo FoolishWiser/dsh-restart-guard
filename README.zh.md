@@ -1,5 +1,10 @@
 # dsh-restart-guard · 重启守护
 
+[![ci](https://github.com/FoolishWiser/dsh-restart-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/FoolishWiser/dsh-restart-guard/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](package.json)
+[![dependencies](https://img.shields.io/badge/runtime%20deps-0-brightgreen.svg)](package.json)
+
 为 [DeepSeek Harness](https://github.com/deepseek-ai/dsh) 的 Web 服务加一个**能在宿主进程死掉后继续存活**的守护进程：发现重启没起来，按一组小规则判断原因，能修的自己修，修不了就把过程和结论发到你指定的渠道（IM、Webhook、命令或本地日志）。
 
 它解决的问题很具体：容器/脚本里 `dsh web` 是后台启动、启动器随后 `exec` 成代理，**没有任何 supervisor 会在插件加载失败、patch 写坏、端口被占时把服务拉起来**。页面 502 到有人发现为止，中间没有任何信息。
