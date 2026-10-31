@@ -14,7 +14,7 @@ import { DEFAULTS } from '../../lib/shared/config.js'
 import { loadLaunchSpec } from '../../lib/shared/launch.js'
 import { instanceDir } from '../../lib/shared/paths.js'
 import { findOccupant, patchBackups, rollbackProfilePatch, spawnDsh, verifyBoot } from '../../lib/repair.js'
-import { fakeTree, profileDir, tmpHome, waitFor, writeFakeLaunch } from '../helpers.mjs'
+import { freePort, fakeTree, profileDir, tmpHome, waitFor, writeFakeLaunch } from '../helpers.mjs'
 
 const PORT_BASE = 3910
 
@@ -29,9 +29,9 @@ function watchdog(port) {
 /**
  * @param {{ mode?: string, counter?: string }} [input]
  */
-function fixture(input = {}) {
+async function fixture(input = {}) {
   const home = tmpHome()
-  const port = PORT_BASE + Math.floor(Math.random() * 80)
+  const port = await freePort(PORT_BASE)
   const logPath = path.join(home, 'boot.log')
   const dir = instanceDir({ DSH_HOME: home }, 'web', port)
   fs.mkdirSync(dir, { recursive: true })
@@ -51,7 +51,7 @@ function fixture(input = {}) {
 }
 
 test('a healthy boot is verified from the access line of this attempt only', async () => {
-  const { port, logPath, spec } = fixture()
+  const { port, logPath, spec } = await fixture()
   fs.writeFileSync(logPath, 'dsh web: http://127.0.0.1:1/?token=stale-token-123456\n')
   const spawn = spawnDsh({ spec, logPath, port, attempt: 1 })
   assert.equal(spawn.ok, true)
@@ -74,7 +74,7 @@ test('a healthy boot is verified from the access line of this attempt only', asy
 })
 
 test('a crashing boot fails verification with the log tail', async () => {
-  const { port, logPath, spec } = fixture({ mode: 'fail' })
+  const { port, logPath, spec } = await fixture({ mode: 'fail' })
   const spawn = spawnDsh({ spec, logPath, port, attempt: 1 })
   assert.equal(spawn.ok, true)
   const result = await verifyBoot({
@@ -91,7 +91,7 @@ test('a crashing boot fails verification with the log tail', async () => {
 })
 
 test('a silent server is only accepted after the inferred settle window', async () => {
-  const { port, logPath, spec } = fixture({ mode: 'silent' })
+  const { port, logPath, spec } = await fixture({ mode: 'silent' })
   const config = watchdog(port)
   config.watchdog.bootTimeoutMs = 4000
   config.readiness.inferredSettleMs = 1000
@@ -115,7 +115,7 @@ test('a silent server is only accepted after the inferred settle window', async 
 })
 
 test('an external listener is reported as a foreign holder, not killed', async () => {
-  const { port } = fixture()
+  const { port } = await fixture()
   const srv = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/html' })
     res.end('<html>not dsh</html>')

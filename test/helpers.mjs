@@ -4,6 +4,7 @@
  * with a `dsh` symlink, and a small poll helper.
  */
 import fs from 'node:fs'
+import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -95,7 +96,21 @@ export async function waitFor(predicate, { timeoutMs = 15000, intervalMs = 100, 
   }
 }
 
-/** @param {number} base */
-export function freePort(base) {
-  return base + Math.floor(Math.random() * 120)
+/**
+ * A port the OS just handed out: bind port 0, read the assignment, close it.
+ * Random ranges collide when test files run in parallel (CI hit EADDRINUSE).
+ * @param {number} [_base] kept for callers that pass a hint
+ * @returns {Promise<number>}
+ */
+export async function freePort(_base) {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer()
+    server.unref()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      const port = typeof address === 'object' && address ? address.port : 0
+      server.close(() => (port ? resolve(port) : reject(new Error('could not allocate a port'))))
+    })
+  })
 }

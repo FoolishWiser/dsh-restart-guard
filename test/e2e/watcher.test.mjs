@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { saveConfig } from '../../lib/shared/config.js'
 import { instanceDir, readJson, writeJsonAtomic } from '../../lib/shared/paths.js'
 import { pidAlive } from '../../lib/shared/probe.js'
-import { fakeTree, notifySink, profileDir, tmpHome, waitFor, writeFakeLaunch } from '../helpers.mjs'
+import { fakeTree, freePort, notifySink, profileDir, tmpHome, waitFor, writeFakeLaunch } from '../helpers.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const watcherPath = path.join(root, 'lib', 'watcher.mjs')
@@ -87,7 +87,7 @@ function dump(dir, extra = {}) {
 
 test('the watcher repairs a dead port, again after kill -9, and stands down for maintenance', async (t) => {
   const home = tmpHome()
-  const port = 3930 + Math.floor(Math.random() * 50)
+  const port = await freePort(3930)
   const logPath = path.join(home, 'boot.log')
   const sink = path.join(home, 'notify.log')
   const dir = instanceDir({ DSH_HOME: home }, 'web', port)

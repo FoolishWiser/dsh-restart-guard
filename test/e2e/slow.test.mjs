@@ -20,7 +20,7 @@ const watcherPath = path.join(import.meta.dirname, '..', '..', 'lib', 'watcher.m
 
 test('a slow but listening host is not restarted', { timeout: 60000 }, async (t) => {
   const home = tmpHome()
-  const port = freePort(3955)
+  const port = await freePort(3955)
   const logPath = path.join(home, 'boot.log')
   const env = { DSH_HOME: home }
   const dir = instanceDir(env, 'web', port)
