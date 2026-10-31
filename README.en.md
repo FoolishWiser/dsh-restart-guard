@@ -6,6 +6,8 @@
 [![node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](package.json)
 [![dependencies](https://img.shields.io/badge/runtime%20deps-0-brightgreen.svg)](package.json)
 
+[**简体中文**](README.md) · English
+
 A watchdog for [DeepSeek Harness](https://github.com/deepseek-ai/dsh) that **survives the host process**, notices when a restart did not come up, decides *why* with a small set of rules, repairs what can safely be repaired, and reports what happened to the channel you configured.
 
 It exists because the usual deployment has nobody to call: `dsh web` is started in the background, the launcher `exec`s into a proxy, and if the new process dies on a bad plugin or a broken patch the web UI stays 502 until a human notices. `dsh-restart-guard` keeps a small detached watcher alive for exactly that gap.
