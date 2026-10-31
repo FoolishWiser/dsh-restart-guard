@@ -95,32 +95,18 @@ Probe fails → grace → diagnosis → plan:
 
 Every incident writes `incidents/*.json`, `ALERT.md`, a log line, and (if configured) one notification per event. A crash loop (default: 3 incidents in 10 minutes) pauses the guard for 30 minutes instead of restarting forever. Two starts per incident is the ceiling.
 
-### AI-assisted repair (optional, off by default)
+### AI repair (optional, off by default)
 
-When the rule ladder has no safe move left (a foreign port holder, a missing module, an unfamiliar startup failure), the watcher can ask an LLM for a second opinion. The model receives only the **redacted boot-log tail** and facts that are already public (diagnosis, attempt number, port, profile, supervisor kind, patch-backup count, versions). It must answer with one JSON verdict:
+When enabled the guard gains a repair channel with two modes:
 
-```json
-{ "action": "retry | rollback-patch | wait | manual", "reason": "…", "hint": "…", "confidence": 0.0 }
-```
+- **act (default) · full permissions**: once the service is judged down, the AI is asked first — the prompt carries the **current environment** (port, host pid/uptime, node and DSH versions, profile path, `cordis.patch.yml` and its recent backups, boot-log path and size, port listeners, diagnosis and evidence, the launch command captured from `/proc`) plus the **redacted log tail**. It may read files, edit configuration, install dependencies, roll back the patch and restart the service; the guard then re-probes the port. **DSH itself is tried first** (`dsh --profile <p> headless "<prompt>"`, inheriting DSH's own model credentials and tools), then the guard's direct call (HTTP or bridge); only if both fail does the rule ladder run (restart → rollback → manual).
+- **advise · verdict only**: no action rights; the model returns one JSON verdict (`retry`/`rollback-patch`/`wait`/`manual`) mapped onto the existing allow-listed actions. Model output is never executed as a command.
 
-The verdict is mapped onto the existing allow-listed actions — the guard never executes model output as a command. Additionally:
+Safety: a maintenance window, an incomplete package tree, or a real supervisor (systemd/pm2) still stops the AI from acting; the log tail is redacted, environment variables are sent as **key names only**, and secrets or access tokens never leave the machine. Nothing is sent while AI repair is off. Hard stops and a foreign port holder are never overridden.
 
-- hard stops (maintenance window, incomplete tree, supervisor-owned process, foreign port holder) are never overridden;
-- a verdict below `0.5` confidence is treated as `manual`;
-- `retry` is refused when a non-DSH process owns the port;
-- `rollback-patch` only applies when a backup exists and no rollback was tried yet;
-- if the call fails (no key, timeout, HTTP error, bad JSON) the rule-based decision stands and `ai-unavailable` is logged.
+Enable it under **Settings → Restart guard → AI repair**, pick the mode and order (`dsh-agent-first` / `direct-first` / `dsh-agent-only` / `direct-only`), then the provider and key source. **By default the guard borrows the harness's own credential** (`refs:` in `$DSH_HOME/.credentials.yaml`: `DEEPSEEK_API_KEY`, `XIAOMI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), so AI repair keeps working while `dsh web` itself is down; narrow it with `ai.credentialSource` (`env`/`dsh`/`none`) or `ai.keyRef`. Keys are read-only and never written to the config or the log.
 
-Enable it under **Settings → Restart guard → AI-assisted repair**, set the provider (`deepseek`, `openai` or a custom OpenAI-compatible endpoint), the model and where the key comes from. **By default the guard borrows the harness's own credential**: it reads the `refs:` block of `$DSH_HOME/.credentials.yaml` (`DEEPSEEK_API_KEY`, `XIAOMI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), so the second opinion keeps working while `dsh web` itself is down. Set `ai.credentialSource` to `env`, `dsh` or `none` to narrow that, or name one credential with `ai.keyRef`. Keys are read-only, never written to the config and never logged.
-
-If you would rather not have the guard call a model API directly, enable **bridging** (`ai.bridge`): the prompt goes to a program's stdin and the same JSON verdict comes back on stdout — for example a small wrapper around `dsh headless`. The bridge is used only when it is enabled. Use **Test AI** to check the wiring; `dsh-restart-guard ai-test` does the same from a shell. The prompts and responses are not logged beyond the verdict summary, and no data leaves the machine unless you turn this on.
-
-### What is *not* repaired automatically
-
-- A port owned by a **non-DSH** process. The guard reports it, never kills it.
-- Anything during a maintenance window or with an incomplete package tree.
-- A wildcard bind, a missing module, or a permission problem: these need a human, so it says so.
-- A clean stop (`exit(0)`) when `respectIntentionalStop` is on.
+`ai.dshAgent` tunes the "DSH itself" channel (`command` defaults to `dsh`, `args` to `["headless"]`, `timeoutMs` to 300000). If the guard should not call a model API directly, enable **bridging** (`ai.bridge`): the prompt goes to a program's stdin and the verdict comes back on stdout. Use **Test AI** or `dsh-restart-guard ai-test` to check the wiring.
 
 ## Configuration
 
@@ -223,6 +209,8 @@ See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md).
 | does not restart | `maintenance` or `supervisor` in the status: expected during upgrades / under systemd. |
 | repeated restarts | the state file shows the diagnosis; fix it, then `resume`. |
 | IM silent | botId/targetId copied from Settings → IM Bot; use **Test notification** first. |
+
+> A QQ bot only exposes its `Bot ID`: leave `targetId` empty and the guard uses the bot's single saved target automatically. If it has none yet, message the bot once (or add it to a group), create a target in dsh-im, then rescan on the settings page.
 
 More in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 

@@ -1,3 +1,14 @@
+## [0.1.3] — 2026-10-31
+
+### Added
+- **AI 修复（完全权限）**：`ai.mode: "act"`（默认）让 AI 直接处理故障——提示词附带完整环境简报（端口、宿主、profile、补丁备份、日志路径、监听者、诊断证据、启动命令）+ 脱敏日志尾部；AI 可改配置、装依赖、回滚 patch、重启服务，之后守护复验端口，失败仍回退规则阶梯。`"advise"` 保留原来的闭集判定。
+- **先 dsh 本体、再插件直连**：`ai.order`（`dsh-agent-first`/`direct-first`/`dsh-agent-only`/`direct-only`），`ai.dshAgent` 控制 `dsh --profile <p> headless` 通道（command/args/timeout）。
+- **IM 只给 botId 也能用**：`notify.im.targetId` 可留空，守护在该 bot 只有一个目标时自动解析；多个目标或无目标时给出明确提示（QQ 只提供 Bot ID 的场景）。
+- `maintenance-end`：服务恢复健康后立即退出维护相位，不再干等窗口结束。
+
+### Fixed
+- 体检里 `ai` 检查改为按模式判断（act + dsh agent 时无需 API key），并显示 mode/order；`im` 检查按自动目标解析结果判断。
+
 # Changelog
 
 All notable changes are documented here. The format follows Keep a Changelog, versions follow SemVer.

@@ -65,17 +65,29 @@ const zh = {
   aiBridge: '用外部程序桥接',
   aiBridgeProgram: '桥接程序（stdin 收提示，stdout 回 JSON）',
   imBot: 'botId',
-  imTarget: 'targetId',
+  imTarget: 'targetId（可选：该 bot 只有一个目标时会自动使用）',
+  imNoTarget: '这个 bot 还没有投递目标。QQ 只给 botId 不够：先和机器人聊一次，再到 dsh-im 设置里新建目标，然后重新扫描。',
   imHint: '在 设置 → IM Bot 里复制 botId；targetId 由你自定义。dsh-im 不在线时先落盘，等 DSH 回来后补发。',
   aiSection: 'AI 辅助修复',
-  aiEnable: '启用 AI 判定（仅在规则无法安全推进时征询）',
+  aiEnable: '启用 AI 修复（完全权限：AI 可直接改配置、装依赖、重启服务）',
+  aiMode: '修复模式',
+  aiModeAct: 'act · AI 直接修复（完全权限）',
+  aiModeAdvise: 'advise · 只给判定，不执行',
+  aiOrder: '尝试顺序',
+  aiOrderAgentFirst: '先 dsh 本体（dsh headless），再插件直连',
+  aiOrderDirectFirst: '先插件直连，再 dsh 本体',
+  aiOrderAgentOnly: '只用 dsh 本体',
+  aiOrderDirectOnly: '只用插件直连',
+  aiAgent: '允许调用 dsh 本体代理（继承 DSH 的模型凭据与工具权限）',
+  aiAgentCommand: 'dsh 本体命令',
+  aiAgentTimeout: 'dsh 本体超时（毫秒）',
   aiPreset: '服务商',
   aiEndpoint: '接口地址',
   aiModel: '模型',
   aiKeyEnv: '密钥环境变量名',
   aiTest: '测试 AI',
   aiTesting: '测试中…',
-  aiHint: '默认关闭。开启后只发送脱敏后的启动日志尾部与环境事实（不含环境变量值、令牌、访问地址）；AI 只能选择“重试 / 回滚 patch / 等待 / 人工”，不会执行任何命令。',
+  aiHint: '默认关闭。开启 act 后，AI 以完全权限修复：提示词附带当前环境（端口、宿主、profile、补丁备份、日志路径、监听者、诊断），先试 dsh 本体（dsh headless）再试插件直连，失败才回退到规则阶梯；发送的日志已脱敏，不含环境变量值、令牌、访问地址。advise 模式只返回判定（重试/回滚/等待/人工），不执行动作。',
   watchdogSection: '守护策略',
   maxAttempts: '连续尝试启动次数',
   startupGrace: '启动宽限（毫秒）',
@@ -158,17 +170,29 @@ const en = {
   aiBridge: 'Bridge through a program',
   aiBridgeProgram: 'Bridge program (prompt on stdin, JSON verdict on stdout)',
   imBot: 'botId',
-  imTarget: 'targetId',
+  imTarget: 'targetId (optional: used automatically when the bot has exactly one target)',
+  imNoTarget: 'This bot has no delivery target yet. A QQ bot id alone is not enough: message the bot once, create a target in dsh-im, then rescan.',
   imHint: 'Copy botId from Settings → IM Bot; targetId is yours. If dsh-im is offline the message is queued and replayed when DSH returns.',
   aiSection: 'AI-assisted repair',
-  aiEnable: 'Enable AI verdicts (consulted only when the rules cannot move safely)',
+  aiEnable: 'Enable AI repair (full permissions: the AI may edit configuration, install dependencies and restart the service)',
+  aiMode: 'Mode',
+  aiModeAct: 'act · let the AI repair directly (full permissions)',
+  aiModeAdvise: 'advise · verdict only, no actions',
+  aiOrder: 'Order',
+  aiOrderAgentFirst: 'DSH agent first (dsh headless), then direct call',
+  aiOrderDirectFirst: 'Direct call first, then DSH agent',
+  aiOrderAgentOnly: 'DSH agent only',
+  aiOrderDirectOnly: 'Direct call only',
+  aiAgent: 'Allow the DSH agent (inherits DSH model credentials and tools)',
+  aiAgentCommand: 'dsh agent command',
+  aiAgentTimeout: 'dsh agent timeout (ms)',
   aiPreset: 'Provider',
   aiEndpoint: 'Endpoint',
   aiModel: 'Model',
   aiKeyEnv: 'API key env var',
   aiTest: 'Test AI',
   aiTesting: 'Testing…',
-  aiHint: 'Off by default. When enabled, only the redacted boot-log tail and environment facts are sent (no env values, tokens or access URLs). The model may only choose retry / rollback-patch / wait / manual; it never executes commands.',
+  aiHint: 'Off by default. In act mode the AI repairs with full permissions: the prompt carries the current environment (port, host, profile, patch backups, log path, listeners, diagnosis), DSH\'s own agent is tried first (dsh headless), then the direct call, and only then the rule ladder. Log text is redacted; no env values, tokens or access URLs are sent. In advise mode the AI only returns retry / rollback-patch / wait / manual and nothing is executed.',
   watchdogSection: 'Watchdog policy',
   maxAttempts: 'Start attempts',
   startupGrace: 'Startup grace (ms)',
@@ -548,6 +572,7 @@ export function Card({ t }) {
         <Field label={t('imTarget')}>
           <input style={styles.input} value={draft.notify.im.targetId || ''} onChange={(event) => update('notify.im.targetId', event.target.value)} />
         </Field>
+        {imInfo && draft.notify.im.botId && imTargets.length === 0 ? <div style={styles.warn}>{t('imNoTarget')}</div> : null}
         <div style={styles.muted}>{t('imHint')} {t('imScanHint')}</div>
       </div>
 
@@ -555,6 +580,29 @@ export function Card({ t }) {
         <h2 style={styles.cardTitle}>{t('aiSection')}</h2>
         <Field label={t('aiEnable')}>
           <input type="checkbox" checked={!!draft.ai.enabled} onChange={(event) => update('ai.enabled', event.target.checked)} />
+        </Field>
+        <Field label={t('aiMode')}>
+          <select style={styles.input} value={draft.ai.mode || 'act'} onChange={(event) => update('ai.mode', event.target.value)}>
+            <option value="act">{t('aiModeAct')}</option>
+            <option value="advise">{t('aiModeAdvise')}</option>
+          </select>
+        </Field>
+        <Field label={t('aiOrder')}>
+          <select style={styles.input} value={draft.ai.order || 'dsh-agent-first'} onChange={(event) => update('ai.order', event.target.value)}>
+            <option value="dsh-agent-first">{t('aiOrderAgentFirst')}</option>
+            <option value="direct-first">{t('aiOrderDirectFirst')}</option>
+            <option value="dsh-agent-only">{t('aiOrderAgentOnly')}</option>
+            <option value="direct-only">{t('aiOrderDirectOnly')}</option>
+          </select>
+        </Field>
+        <Field label={t('aiAgent')}>
+          <input type="checkbox" checked={draft.ai.dshAgent?.enabled !== false} onChange={(event) => update('ai.dshAgent.enabled', event.target.checked)} />
+        </Field>
+        <Field label={t('aiAgentCommand')}>
+          <input style={styles.input} value={draft.ai.dshAgent?.command || 'dsh'} onChange={(event) => update('ai.dshAgent.command', event.target.value)} />
+        </Field>
+        <Field label={t('aiAgentTimeout')}>
+          <input style={styles.input} type="number" min="10000" step="10000" value={draft.ai.dshAgent?.timeoutMs || 300000} onChange={(event) => update('ai.dshAgent.timeoutMs', Number(event.target.value))} />
         </Field>
         <Field label={t('aiPreset')}>
           <select style={styles.input} value={draft.ai.preset} onChange={(event) => update('ai.preset', event.target.value)}>

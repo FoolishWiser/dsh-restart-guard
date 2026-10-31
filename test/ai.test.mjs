@@ -15,9 +15,12 @@ import {
   callBridge,
   extractJson,
   parseVerdict,
+  buildRepairPrompt,
+  repairWithAi,
 } from '../lib/shared/ai.js'
 import { normalizeConfig } from '../lib/shared/config.js'
 import { planRepairSteps } from '../lib/shared/plan.js'
+import { createRequire } from 'node:module'
 
 const config = normalizeConfig({}).config
 
@@ -210,4 +213,132 @@ test('a bridge program turns a prompt on stdin into a verdict without an endpoin
   const failed = await callBridge({ settings: broken, messages })
   assert.equal(failed.ok, false)
   assert.match(failed.error, /bridge exited 2/)
+})
+
+test('act mode is the default and prefers the DSH agent', () => {
+  const { config } = normalizeConfig({})
+  const settings = aiSettings(config, {})
+  assert.equal(settings.mode, 'act')
+  assert.equal(settings.order, 'dsh-agent-first')
+  assert.equal(settings.dshAgent.enabled, true)
+  assert.equal(settings.dshAgent.command, 'dsh')
+  assert.deepEqual(settings.dshAgent.args, ['headless'])
+})
+
+test('repair prompt carries the environment and the verdict contract', () => {
+  const prompt = buildRepairPrompt({
+    locale: 'zh',
+    environment: '## Environment\n- service: port 3098, port open: no',
+    logText: 'startup failed\nAuthorization: Bearer abc.def',
+    port: 3098,
+    profile: 'web',
+    binPath: '/usr/local/bin/dsh',
+    logPath: '/tmp/boot.log',
+    maxLogBytes: 4096,
+  })
+  assert.match(prompt, /完全权限/)
+  assert.match(prompt, /port 3098, port open: no/)
+  assert.match(prompt, /VERDICT \{"action":"fixed\|retry/)
+  assert.match(prompt, /setsid nohup \/usr\/local\/bin\/dsh web --port 3098/)
+  assert.ok(!prompt.includes('abc.def'), 'authorization headers are redacted')
+})
+
+/** A tiny ChildProcess stand-in: emits stdout, then closes with a code. */
+function fakeSpawn(output, code = 0) {
+  (/** @type {any} */ (globalThis)).__fakeSpawnUsesCreateRequire = true
+  const { EventEmitter } = createRequire(import.meta.url)('node:events')
+  return (_command, _args, _options) => {
+    const child = new EventEmitter()
+    child.stdout = new EventEmitter()
+    child.stderr = new EventEmitter()
+    child.killed = false
+    child.kill = () => {
+      child.killed = true
+    }
+    setTimeout(() => {
+      if (output) child.stdout.emit('data', Buffer.from(output))
+      child.emit('close', code)
+    }, 5)
+    return child
+  }
+}
+
+test('repairWithAi runs the DSH agent first and stops when it acts', async () => {
+  const settings = {
+    enabled: true,
+    order: 'dsh-agent-first',
+    dshAgent: { enabled: true, command: 'dsh', args: ['headless'], timeoutMs: 5000 },
+    bridge: { enabled: false, program: '', args: [] },
+    endpoint: 'https://unused.invalid',
+    model: 'm',
+    apiKey: 'k',
+  }
+  let fetched = 0
+  const result = await repairWithAi({
+    settings,
+    prompt: 'fix it',
+    profile: 'web',
+    spawnImpl: fakeSpawn('working...\nVERDICT {"action":"fixed","reason":"rolled back","hint":"restart later","confidence":0.9}\n'),
+    fetchImpl: async () => {
+      fetched += 1
+      throw new Error('direct call must not run when the agent succeeds')
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.via, 'dsh-agent')
+  assert.equal(result.verdict.action, 'retry')
+  assert.equal(result.verdict.fixed, true)
+  assert.equal(fetched, 0)
+})
+
+test('repairWithAi falls back to the direct call when the agent fails', async () => {
+  const settings = {
+    enabled: true,
+    order: 'dsh-agent-first',
+    dshAgent: { enabled: true, command: 'dsh', args: ['headless'], timeoutMs: 5000 },
+    bridge: { enabled: false, program: '', args: [] },
+    endpoint: 'https://api.test/chat/completions',
+    model: 'm',
+    apiKey: 'k',
+    timeoutMs: 2000,
+  }
+  const result = await repairWithAi({
+    settings,
+    prompt: 'fix it',
+    profile: 'web',
+    spawnImpl: fakeSpawn('', 2),
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: '{"action":"rollback-patch","reason":"patch broke it","hint":"check patch","confidence":0.8}' } }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.via, 'model')
+  assert.equal(result.verdict.action, 'rollback-patch')
+  assert.ok(result.notes.some((note) => note.includes('dsh agent')), 'agent failure is recorded')
+})
+
+test('direct-only never starts the DSH agent', async () => {
+  const settings = {
+    enabled: true,
+    order: 'direct-only',
+    dshAgent: { enabled: true, command: 'dsh', args: ['headless'], timeoutMs: 5000 },
+    endpoint: 'https://api.test/chat/completions',
+    model: 'm',
+    apiKey: 'k',
+    timeoutMs: 2000,
+  }
+  const result = await repairWithAi({
+    settings,
+    prompt: 'fix it',
+    spawnImpl: () => {
+      throw new Error('the agent must not run in direct-only mode')
+    },
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: '{"action":"manual","reason":"needs human","hint":"look","confidence":0.7}' } }] }), { status: 200 }),
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.via, 'model')
+  assert.equal(result.verdict.action, 'manual')
 })

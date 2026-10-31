@@ -94,21 +94,18 @@ dsh-restart-guard logs -f     # 跟随守护日志
 
 每个事件都会写 `incidents/*.json`、`ALERT.md`、一行日志，并按配置发通知。**不自动修复**的情形：非 DSH 进程占着端口、维护窗口内、包树不完整、通配地址绑定、缺模块、权限/磁盘问题、以及开启尊重主动停止时的 `exit(0)`。
 
-## AI 辅助修复（可选，默认关闭）
+## AI 修复（可选，默认关闭）
 
-当规则阶梯没有安全动作可用（陌生监听者、缺模块、没见过的启动失败），watcher 可以向大模型要一个“第二意见”。发给模型的只有**脱敏后的启动日志尾部**和本来就公开的事实（诊断、尝试次数、端口、profile、监督者类型、patch 备份数、版本号），并要求它只回一个 JSON：
+开启后守护多一档修复手段，分两种模式：
 
-```json
-{ "action": "retry | rollback-patch | wait | manual", "reason": "…", "hint": "…", "confidence": 0.0 }
-```
+- **act（默认）· 完全权限**：一旦判定服务起不来，先让 AI 直接处理——提示词里附带**当前环境**（端口、宿主 pid/运行时长、node 与 DSH 版本、profile 路径、`cordis.patch.yml` 及最近备份、启动日志路径与大小、端口监听者、诊断与证据、`/proc` 抓到的启动命令），再附上**脱敏后的日志尾部**；AI 可以读文件、改配置、补依赖、回滚 patch、重启服务，随后守护复验端口。**先试 dsh 本体**（`dsh --profile <p> headless "<prompt>"`，继承 DSH 自己的模型凭据与工具权限），再试插件直连（HTTP / 桥接）；两者都不行才回退到原来的规则阶梯（重启 → 回滚 → 人工）。
+- **advise · 只判定**：不给动作权限，只回一个 JSON 判定（`retry`/`rollback-patch`/`wait`/`manual`），映射到已有白名单动作；模型输出永远不会被当作命令执行。
 
-判定会被映射到**已有的白名单动作**上，模型输出不会被当作命令执行。此外：维护窗口/包树不完整/有监督者/陌生端口占用这类硬停不会被覆盖；置信度低于 `0.5` 视为人工处理；非 DSH 进程占端口时拒绝 `retry`；`rollback-patch` 仅在存在备份且本次事件尚未回滚时可用；调用失败（没有 key、超时、HTTP 错误、JSON 不合法）时保留规则结论并记 `ai-unavailable`。
+安全边界：维护窗口、包树不完整、有真正的监督者（systemd/pm2）时 AI 也不会动手；发送的日志已脱敏，环境变量只发**键名**，密钥与访问令牌不外发；不开启就没有任何外发。硬停与“非 DSH 进程占端口”同样不会被覆盖。
 
-在 **设置 → 重启守护 → AI 辅助修复** 里开启，选择服务商（`deepseek` / `openai` / 自定义 OpenAI 兼容端点）、模型、以及密钥来源。**密钥默认直接借用 DSH 自己的**：守护会读 `$DSH_HOME/.credentials.yaml` 的 `refs:` 块（`DEEPSEEK_API_KEY`、`XIAOMI_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`），所以即使 `dsh web` 本身起不来，第二意见仍然可用；也可以改成只读环境变量（`ai.credentialSource: "env"`）、只读 DSH 凭据库（`"dsh"`）或指定某个凭据名（`ai.keyRef`）。密钥只读、不写进配置、不落日志。
+在 **设置 → 重启守护 → AI 修复** 里开启，选择模式与尝试顺序（`dsh-agent-first` / `direct-first` / `dsh-agent-only` / `direct-only`），再配服务商与密钥来源。**密钥默认直接借用 DSH 自己的**：读 `$DSH_HOME/.credentials.yaml` 的 `refs:` 块（`DEEPSEEK_API_KEY`、`XIAOMI_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`），所以即使 `dsh web` 本身起不来，AI 修复仍然可用；也可改成只读环境变量（`ai.credentialSource: "env"`）、只读 DSH 凭据库（`"dsh"`）或指定凭据名（`ai.keyRef`）。密钥只读、不写配置、不落日志。
 
-如果不想让守护直接连模型 API，可以开**桥接**（`ai.bridge`）：它把提示词写到某个程序的 stdin，从 stdout 读同一种 JSON 判定，例如包一层 `dsh headless`。注意：`callAi` 只有在桥接开启时才走桥，否则走 HTTP。
-
-点 **测试 AI** 验证链路，命令行等价命令是 `dsh-restart-guard ai-test`。不开启就不会有任何数据外发。
+`ai.dshAgent` 控制“dsh 本体”通道（`command` 默认 `dsh`、`args` 默认 `["headless"]`、`timeoutMs` 默认 300000）。不想让守护直接连 API 时开**桥接**（`ai.bridge`）：提示词写程序 stdin、判定从 stdout 读。点 **测试 AI** 验证链路，命令行等价命令 `dsh-restart-guard ai-test`。
 
 ## 配置
 
@@ -208,6 +205,8 @@ CLI 通过控制文件与 watcher 通信（不需要页面 token）；动作需�
 | 不重启 | 状态是 `maintenance`/`supervised`：升级期和 systemd 下这是预期行为 |
 | 反复重启 | state 文件里有诊断；修好后 `resume` |
 | IM 没动静 | 先从 设置 → IM Bot 复制 botId/targetId，用“测试通知”验证 |
+
+> QQ 机器人只暴露 `Bot ID`：`targetId` 可以留空，守护会在该 bot 只有一个投递目标时自动使用它；还没有目标时，先和机器人私聊一次（或拉进群），再到 dsh-im 里“新建目标”，然后回到设置页重新扫描。
 
 更多见 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)。
 
