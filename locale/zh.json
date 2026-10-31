@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "重启守护",
+    "description": "DSH Web 重启守护：脱离宿主进程持续监控，启动失败时诊断并修复，过程写入日志、IM 或 Webhook。"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "name": "dsh-restart-guard",
+  "version": "0.1.0",
+  "description": "Watchdog plugin for DeepSeek Harness web: survives the host process, detects failed restarts and upgrades, repairs what can be repaired, and reports to IM, webhooks or logs.",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "watchdog",
+    "restart",
+    "plugin"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./watcher": "./lib/watcher.mjs",
+    "./shared/*": "./lib/shared/*.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-restart-guard": "./lib/cli.mjs"
+  },
+  "files": [
+    "lib",
+    "locale",
+    "docs",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "PRIVACY.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:client": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs test/e2e/*.test.mjs",
+    "check": "npm run typecheck && npm test",
+    "prepack": "node scripts/build-client.mjs --check"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./dsh-restart-guard.bundle.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots",
+        "locale"
+      ]
+    },
+    "engines": {
+      "dsh": ">=0.2.1"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

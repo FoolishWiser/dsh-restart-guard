@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ES2023"
+    ],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ],
+    "resolveJsonModule": true,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false
+  },
+  "include": [
+    "lib/**/*.js",
+    "lib/**/*.mjs",
+    "test/**/*.mjs",
+    "scripts/**/*.mjs"
+  ],
+  "exclude": [
+    "lib/client.js",
+    "node_modules",
+    "test/fixtures"
+  ]
+}

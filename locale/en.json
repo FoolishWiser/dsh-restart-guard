@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Restart Guard",
+    "description": "Watchdog for DSH web: survives the host, diagnoses failed restarts, repairs them, and reports to logs, IM or webhooks."
+  }
+}
