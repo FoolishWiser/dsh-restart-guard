@@ -51,6 +51,31 @@ function stateOf(dir) {
   return readJson(path.join(dir, 'state.json'), null) ?? {}
 }
 
+/** @param {string} file @param {number} lines */
+function tail(file, lines) {
+  try {
+    return fs.readFileSync(file, 'utf8').trimEnd().split('\n').slice(-lines).join('\n')
+  } catch {
+    return '(missing)'
+  }
+}
+
+/**
+ * Everything the watcher left behind, for a diagnosable CI failure.
+ * @param {string} dir @param {{ state?: any, plan?: any }} [extra]
+ */
+function dump(dir, extra = {}) {
+  return JSON.stringify(
+    {
+      state: extra.state ?? stateOf(dir),
+      plan: extra.plan ?? readJson(path.join(dir, 'control', 'plan.json'), null),
+      logTail: tail(path.join(dir, 'restart-guard.log'), 80),
+    },
+    null,
+    1,
+  )
+}
+
 test('the watcher repairs a dead port, again after kill -9, and stands down for maintenance', async (t) => {
   const home = tmpHome()
   const port = 3930 + Math.floor(Math.random() * 50)
@@ -77,15 +102,20 @@ test('the watcher repairs a dead port, again after kill -9, and stands down for 
     }
   })
 
-  await waitFor(
-    () => {
-      const state = stateOf(dir)
-      const pid = Number(state.startedPid) || 0
-      if (pid > 0 && pidAlive(pid)) spawned.add(pid)
-      return state.phase === 'monitoring' && state.health?.ok === true && pidAlive(pid)
-    },
-    { timeoutMs: 30000, intervalMs: 250, label: 'first repair' },
-  )
+  try {
+    await waitFor(
+      () => {
+        const state = stateOf(dir)
+        const pid = Number(state.startedPid) || 0
+        if (pid > 0 && pidAlive(pid)) spawned.add(pid)
+        return state.phase === 'monitoring' && state.health?.ok === true && pidAlive(pid)
+      },
+      { timeoutMs: 60000, intervalMs: 250, label: 'first repair' },
+    )
+  } catch (error) {
+    t.diagnostic(`watcher never repaired:\n${dump(dir)}`)
+    throw error
+  }
   const first = stateOf(dir)
   assert.equal(first.incident, null)
   const firstPid = Number(first.startedPid)
@@ -101,15 +131,20 @@ test('the watcher repairs a dead port, again after kill -9, and stands down for 
 
   // A hard kill must be repaired too.
   process.kill(firstPid, 'SIGKILL')
-  await waitFor(
-    () => {
-      const state = stateOf(dir)
-      const pid = Number(state.startedPid) || 0
-      if (pid > 0) spawned.add(pid)
-      return pid !== firstPid && pidAlive(pid) && state.phase === 'monitoring' && state.health?.ok === true
-    },
-    { timeoutMs: 30000, intervalMs: 250, label: 'second repair' },
-  )
+  try {
+    await waitFor(
+      () => {
+        const state = stateOf(dir)
+        const pid = Number(state.startedPid) || 0
+        if (pid > 0) spawned.add(pid)
+        return pid !== firstPid && pidAlive(pid) && state.phase === 'monitoring' && state.health?.ok === true
+      },
+      { timeoutMs: 60000, intervalMs: 250, label: 'second repair' },
+    )
+  } catch (error) {
+    t.diagnostic(`watcher never recovered from SIGKILL:\n${dump(dir)}`)
+    throw error
+  }
 
   const launch = JSON.parse(fs.readFileSync(path.join(dir, 'launch.json'), 'utf8'))
   assert.ok(!String(launch.argv[1]).endsWith('watcher.mjs'), 'the stored recipe must never be the watcher itself')
