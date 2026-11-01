@@ -33,6 +33,12 @@ const zh = {
   saved: '已保存',
   saving: '保存中…',
   actions: '操作',
+  repairTitle: 'AI 修复记录',
+  repairFix: 'AI 已修复插件文件：',
+  repairDisable: 'AI 已禁用启动条目：',
+  repairHint: '确认 DSH 能正常启动后，可以还原 AI 的改动；下次重启 DSH 时会重新加载原来的插件。',
+  repairUndo: '恢复 AI 修复',
+  confirmUndo: '确定还原 AI 对插件文件/启动条目的改动？下次重启后原来的插件会重新加载。',
   testNotify: '发送测试通知',
   pause: '暂停守护',
   resume: '恢复守护',
@@ -138,6 +144,12 @@ const en = {
   saved: 'Saved',
   saving: 'Saving…',
   actions: 'Actions',
+  repairTitle: 'AI repair record',
+  repairFix: 'AI repaired plugin files:',
+  repairDisable: 'AI disabled loader entry:',
+  repairHint: 'Once DSH boots cleanly you can undo the AI change; the original plugin is loaded again after the next restart.',
+  repairUndo: 'Undo AI repair',
+  confirmUndo: 'Restore the files or loader entry changed by the AI repair? The original plugin loads again after the next restart.',
   testNotify: 'Send test notification',
   pause: 'Pause guard',
   resume: 'Resume guard',
@@ -720,6 +732,23 @@ export function Card({ t }) {
         </div>
         <div style={styles.muted}>{t('maintenanceHint')}</div>
       </div>
+
+      {state.state?.repair ? (
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>{t('repairTitle')}</h2>
+          <div style={styles.muted}>
+            {state.state.repair.kind === 'fix-plugin'
+              ? `${t('repairFix')} ${state.state.repair.entryName} · ${(state.state.repair.changed || []).map((item) => item.file).join(', ')}`
+              : `${t('repairDisable')} ${state.state.repair.entryId}`}
+          </div>
+          <div style={styles.muted}>{t('repairHint')}</div>
+          <div style={styles.row}>
+            <button style={styles.button} onClick={() => confirmThen(t('confirmUndo'), 'restore-repair')} disabled={!!busy}>
+              {t('repairUndo')}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div style={styles.card}>
         <div style={styles.row}>

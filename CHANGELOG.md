@@ -1,3 +1,35 @@
+## [0.1.7] — 2026-11-01
+
+### Added
+
+- **AI repairs third-party plugins.** When a plugin aborts startup, the guard
+  parses the real `startup failed` / `Failed plugins` block, resolves the
+  failing package, sends its `package.json`, entry file and root configs to the
+  AI, and accepts `fix-plugin` verdicts with 1–3 full-file edits. Every edit is
+  path-checked, backed up (`.guard-bak-<ts>`), syntax-checked and applied
+  atomically; any failure restores all files. Core packages (`@deepseek-ai/*`
+  and the guard itself) are never editable.
+- `disable-plugin` verdicts (loader-entry fallback) and a **Undo AI repair**
+  action/button (`restore-repair`) that restores edited files or the profile
+  patch.
+- A `demo/` scenario (isolated profile/port, stub or real AI) that reproduces
+  "plugin breaks startup → AI fixes it → DSH boots".
+- `readiness.inferredQuietMs`: after the inferred settle window the guard keeps
+  watching for a quiet period before accepting a host that never prints its
+  access line.
+
+### Fixed
+
+- A boot that prints `startup failed` is no longer accepted just because the
+  process keeps answering 401: `verifyBoot` now fails with `startup-failed`
+  even when the port answers, and the half-started process is killed before the
+  next attempt.
+- The diagnosis parser understands DSH's `Failed plugins (N):` block
+  (`<id> (required)`, `Package:`, `Error:` lines) and keeps each plugin's own
+  package name and detail.
+- The AI is re-asked inside the repair ladder once the failed boot names the
+  plugin, so `fix-plugin` sees real material instead of an unknown diagnosis.
+
 ## [0.1.6] — 2026-11-01
 
 ### Fixed

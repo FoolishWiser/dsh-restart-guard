@@ -102,6 +102,8 @@ When enabled the guard gains a repair channel with two modes:
 - **act (default) · full permissions**: once the service is judged down, the AI is asked first — the prompt carries the **current environment** (port, host pid/uptime, node and DSH versions, profile path, `cordis.patch.yml` and its recent backups, boot-log path and size, port listeners, diagnosis and evidence, the launch command captured from `/proc`) plus the **redacted log tail**. It may read files, edit configuration, install dependencies, roll back the patch and restart the service; the guard then re-probes the port. **DSH itself is tried first** (`dsh --profile <p> headless "<prompt>"`, inheriting DSH's own model credentials and tools), then the guard's direct call (HTTP or bridge); only if both fail does the rule ladder run (restart → rollback → manual).
 - **advise · verdict only**: no action rights; the model returns one JSON verdict (`retry`/`rollback-patch`/`wait`/`manual`) mapped onto the existing allow-listed actions. Model output is never executed as a command.
 
+**Broken plugins are repaired in place.** When startup fails because of a third-party plugin (DSH prints `startup failed` / `Failed plugins` but keeps the process alive and the port still answers 401), the guard parses the failing entry and package from the log, hands the package's `package.json`, entry file and root configs to the AI, and asks for `fix-plugin` (full contents of 1–3 files). The guard validates the paths (inside the package, ≤64 KiB, no symlinks), backs up every file (`.guard-bak-<ts>`), checks syntax (`node --check` / `JSON.parse`), and only then boots DSH again; any failure restores everything. If the file cannot be fixed, the verdict falls back to `disable-plugin` (disable the loader entry) or `manual`. Core packages (`@deepseek-ai/*` and this plugin) are never editable, and the settings page offers **Undo AI repair**.
+
 Safety: a maintenance window, an incomplete package tree, or a real supervisor (systemd/pm2) still stops the AI from acting; the log tail is redacted, environment variables are sent as **key names only**, and secrets or access tokens never leave the machine. Nothing is sent while AI repair is off. Hard stops and a foreign port holder are never overridden.
 
 Enable it under **Settings → Restart guard → AI repair**, pick the mode and order (`dsh-agent-first` / `direct-first` / `dsh-agent-only` / `direct-only`), then the provider and key source. **By default the guard borrows the harness's own credential** (`refs:` in `$DSH_HOME/.credentials.yaml`: `DEEPSEEK_API_KEY`, `XIAOMI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`), so AI repair keeps working while `dsh web` itself is down; narrow it with `ai.credentialSource` (`env`/`dsh`/`none`) or `ai.keyRef`. Keys are read-only and never written to the config or the log.
@@ -184,6 +186,16 @@ dsh-restart-guard resume
 dsh-restart-guard maintenance start|end [--minutes 60] [--reason upgrade]
 dsh-restart-guard notify-test          send a test message
 dsh-restart-guard ai-test              ask the configured AI for a verdict (no action)
+
+**Reproduce the broken-plugin demo** (isolated port 3098, the live 3079 is untouched):
+
+```bash
+demo/run.sh          # deterministic: a stub bridge returns fix-plugin
+demo/run.sh --real   # real model through DSH's own credentials
+demo/run.sh --keep   # keep the instance; finish with demo/stop.sh
+```
+
+The demo registers a real third-party plugin under a required loader id; the plugin throws while its `demo-config.json` says `enabled: false`, and the host is killed. The guard should notice "401 on the port but the boot failed", kill the half-started process, ask the AI, flip `enabled` back to `true` and boot again.
 dsh-restart-guard reload               reload config
 dsh-restart-guard install|uninstall [--profile web] [--dry-run]
 dsh-restart-guard purge                delete all guard state

@@ -1,0 +1,7 @@
+{
+  "name": "dsh-demo-broken",
+  "version": "0.0.0-demo",
+  "private": true,
+  "type": "module",
+  "main": "index.js"
+}

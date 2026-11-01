@@ -238,7 +238,7 @@ test('repair prompt carries the environment and the verdict contract', () => {
   })
   assert.match(prompt, /完全权限/)
   assert.match(prompt, /port 3098, port open: no/)
-  assert.match(prompt, /VERDICT \{"action":"fixed\|retry/)
+  assert.match(prompt, /VERDICT \{"action":"fix-plugin/)
   assert.match(prompt, /setsid nohup \/usr\/local\/bin\/dsh web --port 3098/)
   assert.ok(!prompt.includes('abc.def'), 'authorization headers are redacted')
 })
@@ -341,4 +341,77 @@ test('direct-only never starts the DSH agent', async () => {
   assert.equal(result.ok, true)
   assert.equal(result.via, 'model')
   assert.equal(result.verdict.action, 'manual')
+})
+
+test('parseVerdict: fix-plugin edits are validated and bounded', () => {
+  const ok = parseVerdict('VERDICT {"action":"fix-plugin","edits":[{"file":"demo-config.json","content":"{\\"enabled\\":true}"}],"reason":"flip","hint":"","confidence":0.9}')
+  assert.equal(ok.ok, true)
+  assert.equal(/** @type {any} */ (ok).verdict.action, 'fix-plugin')
+  assert.equal(/** @type {any} */ (ok).verdict.edits.length, 1)
+
+  const absolute = parseVerdict('VERDICT {"action":"fix-plugin","edits":[{"file":"/etc/passwd","content":"x"}]}')
+  assert.equal(absolute.ok, false)
+  assert.match(/** @type {any} */ (absolute).error, /must stay inside the plugin directory/)
+
+  const dotdot = parseVerdict('VERDICT {"action":"fix-plugin","edits":[{"file":"../x.js","content":"x"}]}')
+  assert.equal(dotdot.ok, false)
+
+  const four = parseVerdict(`VERDICT {"action":"fix-plugin","edits":[${Array.from({ length: 4 }, (_, i) => `{"file":"f${i}.js","content":"x"}`).join(',')}]}`)
+  assert.equal(four.ok, false)
+  assert.match(/** @type {any} */ (four).error, /1-3 edits/)
+
+  const disable = parseVerdict('VERDICT {"action":"disable-plugin","reason":"broken"}')
+  assert.equal(disable.ok, false)
+  assert.match(/** @type {any} */ (disable).error, /entryId/)
+})
+
+test('applyAiVerdict: fix-plugin replaces the manual stop with an AI fix step', () => {
+  const plan = planFor('module-missing')
+  assert.ok(plan.steps.some((item) => item.action === 'manual'))
+  const merged = applyAiVerdict(
+    plan,
+    { action: 'fix-plugin', edits: [{ file: 'demo-config.json', content: '{"enabled":true}' }], reason: 'flip', hint: '', confidence: 0.9 },
+    { entryName: 'demo-broken', corePackage: false },
+  )
+  assert.equal(merged.ok, true)
+  assert.equal(merged.applied, true)
+  assert.equal(plan.steps[0].action, 'fix-plugin')
+  assert.ok(plan.steps.some((item) => item.action === 'start-dsh'))
+  assert.equal(plan.stopReason, 'ai-fix')
+  assert.ok(!plan.steps.some((item) => item.action === 'manual'))
+})
+
+test('applyAiVerdict: core packages and disable-plugin', () => {
+  const core = planFor('module-missing')
+  const refused = applyAiVerdict(
+    core,
+    { action: 'fix-plugin', edits: [{ file: 'index.js', content: 'x' }], reason: 'fix', hint: '', confidence: 0.9 },
+    { entryName: '@deepseek-ai/dsh-base', corePackage: true },
+  )
+  assert.equal(refused.applied, false)
+
+  const plan = planFor('module-missing')
+  const disabled = applyAiVerdict(
+    plan,
+    { action: 'disable-plugin', entryId: 'demo-broken', reason: 'disable', hint: '', confidence: 0.8 },
+    { entryName: 'demo-broken' },
+  )
+  assert.equal(disabled.applied, true)
+  assert.equal(plan.steps[0].action, 'disable-plugin')
+  assert.equal(plan.stopReason, 'ai-disable')
+})
+
+test('buildRepairPrompt: plugin material is included before the log tail', () => {
+  const prompt = buildRepairPrompt({
+    locale: 'zh',
+    environment: '- host: demo',
+    logText: 'boom',
+    port: 3098,
+    profile: 'web',
+    binPath: '/usr/local/bin/dsh',
+    logPath: '/tmp/boot.log',
+    material: '## Failing plugin\n- entry: modules (required)\n',
+  })
+  assert.ok(prompt.includes('## Failing plugin'))
+  assert.ok(prompt.indexOf('## Failing plugin') < prompt.indexOf('boom'))
 })

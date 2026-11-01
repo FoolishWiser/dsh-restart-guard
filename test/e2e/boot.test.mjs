@@ -95,6 +95,7 @@ test('a silent server is only accepted after the inferred settle window', async 
   const config = watchdog(port)
   config.watchdog.bootTimeoutMs = 4000
   config.readiness.inferredSettleMs = 1000
+  config.readiness.inferredQuietMs = 500
   const spawn = spawnDsh({ spec, logPath, port, attempt: 1 })
   try {
     const result = await verifyBoot({

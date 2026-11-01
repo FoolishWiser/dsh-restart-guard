@@ -119,3 +119,32 @@ test('readLogSegment handles a missing file', () => {
   assert.equal(segment.text, '')
   assert.equal(segment.size, 0)
 })
+
+test('parseBootFailure reads the real "Failed plugins" startup block', () => {
+  const text = [
+    'dsh: startup failed: 1 required plugin did not activate',
+    '',
+    'Failed plugins (2):',
+    '  modules (required)',
+    '    Package: dsh-demo-broken',
+    '    Error: dsh-demo-broken: demo-config.json has enabled=false; set enabled to true',
+    '        at new apply (file:///demo/broken-plugin/index.js:26:11)',
+    '  web-ui-task-board',
+    '    Package: @linxin666/dsh-client-ui-task-board',
+    '    Error: task-board ledger is already owned by process 4441',
+    '',
+    'Plugins waiting for services (1):',
+    '  Plugin      Missing services',
+    '  client-hmr  clientModules',
+  ].join('\n')
+  const result = parseBootFailure(text)
+  assert.equal(result.incident, 'startup-failed')
+  assert.equal(result.entryId, 'modules')
+  assert.equal(result.entryName, 'dsh-demo-broken')
+  assert.equal(result.required, true)
+  assert.equal(result.failedPlugins.length, 2)
+  assert.equal(result.failedPlugins[1].id, 'web-ui-task-board')
+  assert.equal(result.failedPlugins[1].required, false)
+  assert.match(result.failedPlugins[0].detail, /enabled=false/)
+  assert.match(result.evidence.join(' '), /startup failed/)
+})

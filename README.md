@@ -101,6 +101,8 @@ dsh-restart-guard logs -f     # 跟随守护日志
 - **act（默认）· 完全权限**：一旦判定服务起不来，先让 AI 直接处理——提示词里附带**当前环境**（端口、宿主 pid/运行时长、node 与 DSH 版本、profile 路径、`cordis.patch.yml` 及最近备份、启动日志路径与大小、端口监听者、诊断与证据、`/proc` 抓到的启动命令），再附上**脱敏后的日志尾部**；AI 可以读文件、改配置、补依赖、回滚 patch、重启服务，随后守护复验端口。**先试 dsh 本体**（`dsh --profile <p> headless "<prompt>"`，继承 DSH 自己的模型凭据与工具权限），再试插件直连（HTTP / 桥接）；两者都不行才回退到原来的规则阶梯（重启 → 回滚 → 人工）。
 - **advise · 只判定**：不给动作权限，只回一个 JSON 判定（`retry`/`rollback-patch`/`wait`/`manual`），映射到已有白名单动作；模型输出永远不会被当作命令执行。
 
+**坏插件可以直接修文件**：当启动失败是某个第三方插件引起时（DSH 打印 `startup failed` / `Failed plugins`，但进程不退出、端口仍回 401），守护会从日志里解析失败条目与包名，把该包的 `package.json`、入口文件和根目录配置交给 AI，并要求它返回 `fix-plugin`（1–3 个文件的完整内容）。守护负责**校验**（路径必须在包内、≤64 KiB、无符号链接）、**备份**（原文件旁 `.guard-bak-<时间>`）、**语法检查**（`node --check` / `JSON.parse`）后再启动；任一步失败就全部还原。只有修不了时才退回 `disable-plugin`（禁用对应加载器条目）或 `manual`。核心包（`@deepseek-ai/*` 与本插件）永远不允许被 AI 修改；修好之后设置页会显示"AI 修复中"，可用 **恢复 AI 修复** 一键还原。
+
 安全边界：维护窗口、包树不完整、有真正的监督者（systemd/pm2）时 AI 也不会动手；发送的日志已脱敏，环境变量只发**键名**，密钥与访问令牌不外发；不开启就没有任何外发。硬停与“非 DSH 进程占端口”同样不会被覆盖。
 
 在 **设置 → 重启守护 → AI 修复** 里开启，选择模式与尝试顺序（`dsh-agent-first` / `direct-first` / `dsh-agent-only` / `direct-only`），再配服务商与密钥来源。**密钥默认直接借用 DSH 自己的**：读 `$DSH_HOME/.credentials.yaml` 的 `refs:` 块（`DEEPSEEK_API_KEY`、`XIAOMI_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`），所以即使 `dsh web` 本身起不来，AI 修复仍然可用；也可改成只读环境变量（`ai.credentialSource: "env"`）、只读 DSH 凭据库（`"dsh"`）或指定凭据名（`ai.keyRef`）。密钥只读、不写配置、不落日志。
@@ -180,6 +182,16 @@ dsh-restart-guard resume
 dsh-restart-guard maintenance start|end [--minutes 60] [--reason upgrade]
 dsh-restart-guard notify-test          发测试消息
 dsh-restart-guard ai-test              征询一次 AI 判定（不执行动作）
+
+**复现坏插件演示**（隔离端口 3098，不动线上 3079）：
+
+```bash
+demo/run.sh          # 离线确定性：stub AI 通过 bridge 返回 fix-plugin
+demo/run.sh --real   # 用 DSH 自己的凭据调真实模型
+demo/run.sh --keep   # 保留演示实例，用 demo/stop.sh 收尾
+```
+
+演示会把一个真实的第三方插件注册到 required 加载器 id 上，插件读取自己的 `demo-config.json`（`enabled: false` 时抛错），然后杀掉宿主。守护应当检测到"端口有 401 但启动失败"、杀掉半启动进程、调用 AI、把 `enabled` 改回 `true`、再启动成功。
 dsh-restart-guard reload               重载配置
 dsh-restart-guard install|uninstall [--profile web] [--dry-run]
 dsh-restart-guard purge                清空全部守护状态

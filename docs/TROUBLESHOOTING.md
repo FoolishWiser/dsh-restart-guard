@@ -114,3 +114,30 @@ version:
 ```bash
 pkill -f 'lib/watcher.mjs --home'   # the host respawns exactly one
 ```
+
+## DSH answers 401 but the page is broken
+
+`dsh web` prints `dsh: startup failed: N required plugin(s) did not activate`
+and keeps the process alive, so a plain port probe would call it healthy. Since
+0.1.7 the guard reads the new boot-log bytes and treats that block as a failed
+boot, kills the half-started process and repairs. If it still reports healthy,
+check `state.diagnostics.mirror`/`mirrorPath`: the guard must be reading the
+boot log this host actually writes.
+
+## The AI repair was rejected
+
+- `edit path "…" must stay inside the plugin directory` — the model tried a
+  path outside the failing package; nothing was written.
+- `demo-config.json does not exist inside the plugin` — the verdict targeted a
+  file that is not part of the package (only existing files may be edited).
+- `… is a core package and is never edited by AI` — `@deepseek-ai/*` and the
+  guard itself are protected; use `disable-plugin` or a manual fix instead.
+- `syntax check failed for …` — the file was rolled back; every edited file is
+  restored from its `.guard-bak-<ts>` backup.
+- Use **Undo AI repair** (or `restore-repair`) to revert a successful fix.
+
+## Reproduce the plugin-repair demo
+
+`demo/run.sh` (offline stub) or `demo/run.sh --real` runs the whole scenario on
+an isolated port; `--keep` leaves it running for inspection, `demo/stop.sh`
+cleans it up.

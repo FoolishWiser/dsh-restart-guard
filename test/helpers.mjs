@@ -59,9 +59,9 @@ export function profileDir(home, profile = 'web') {
 /**
  * Write a launch spec that starts the fake server on `port`.
  * @param {string} instanceDir
- * @param {{ port: number, logPath: string, mode?: string, counter?: string, binPath?: string, pkgRoot?: string }} input
+ * @param {{ port: number, logPath: string, mode?: string, counter?: string, binPath?: string, pkgRoot?: string, env?: Record<string, string> }} input
  */
-export function writeFakeLaunch(instanceDir, { port, logPath, mode = 'ok', counter = '', binPath, pkgRoot }) {
+export function writeFakeLaunch(instanceDir, { port, logPath, mode = 'ok', counter = '', binPath, pkgRoot, env = {} }) {
   const self = captureSelf()
   const spec = {
     ...self,
@@ -69,6 +69,7 @@ export function writeFakeLaunch(instanceDir, { port, logPath, mode = 'ok', count
     env: {
       ...(mode !== 'ok' ? { FAKE_DSH_MODE: mode } : {}),
       ...(counter ? { FAKE_DSH_COUNTER: counter } : {}),
+      ...env,
     },
     cwd: instanceDir,
     nodePath: process.execPath,

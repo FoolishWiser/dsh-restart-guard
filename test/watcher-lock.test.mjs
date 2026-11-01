@@ -87,3 +87,29 @@ test('a stop control only stops the watcher it names', { timeout: 30000 }, async
     watcher.kill('SIGKILL')
   }
 })
+
+test('a fresh lock left by a killed watcher is taken over immediately', { timeout: 30000 }, async () => {
+  const home = tmpHome()
+  const port = await freePort(4030)
+  const env = { DSH_HOME: home }
+  const dir = instanceDir(env, 'web', port)
+  profileDir(home, 'web')
+  const tree = fakeTree(home)
+  writeFakeLaunch(dir, { port, logPath: path.join(home, 'boot.log'), mode: 'ok', binPath: tree.binPath, pkgRoot: tree.pkgRoot })
+  saveConfig({ watchdog: { probeIntervalMs: 500 }, maintenance: { autoDetect: false }, supervision: { mode: 'none' } }, { env })
+  // A SIGKILL leaves a brand-new lock file behind; 999999 is not running.
+  writeJsonAtomic(path.join(dir, 'watcher.lock'), { pid: 999_999, startedAt: Date.now(), version: '0.1.7' })
+
+  const watcher = startWatcher({ home, dir, port })
+  try {
+    await waitFor(() => (readJson(path.join(dir, 'watcher.json'), null)?.pid === watcher.pid ? true : null), {
+      timeoutMs: 10000,
+      intervalMs: 100,
+      label: 'successor takes over the stale lock',
+    })
+    const lock = readJson(path.join(dir, 'watcher.lock'), null)
+    assert.equal(lock?.pid, watcher.pid, 'the successor owns the lock')
+  } finally {
+    watcher.kill('SIGKILL')
+  }
+})

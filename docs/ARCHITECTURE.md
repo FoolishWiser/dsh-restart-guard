@@ -93,6 +93,31 @@ Safety invariants, in order:
 
 While active, the guard writes nothing destructive: no spawn, no rollback, no kill. If the tree is still incomplete when the window expires, it reports `tree-incomplete` and refuses to start rather than running a half-swapped installation.
 
+## AI plugin repair (0.1.7)
+
+1. `repair()` first calls `aiActRepair()` while the diagnosis is still coarse
+   (`down`). In `act` mode the AI may already act; the rule ladder is only a
+   fallback.
+2. The ladder spawns DSH and `verifyBoot()` judges readiness on the bytes the
+   attempt appended. A `startup failed` / `Failed plugins` / `did not activate`
+   marker wins over a 401 answer: dsh prints a StartupError and stays alive, so
+   the port alone proves nothing. The half-started process is then stopped
+   (`boot-kill`) so the next attempt can own the port.
+3. `parseBootFailure()` turns the block into `failedPlugins` with each entry's
+   id, package, required flag and first error line.
+4. When a failed boot names a package, the ladder asks the AI again with that
+   diagnosis; the prompt carries the environment briefing, the redacted log
+   tail and the plugin material (`buildPluginMaterial`: package.json, entry
+   file, root configs, 32 KiB budget).
+5. `fix-plugin` verdicts go through `applyPluginRepair()`:
+   `resolveFailingPackage()` (realpath, must live under `$DSH_HOME`, core names
+   refused) → `applyAiEdits()` (path checks, backups, atomic writes, syntax
+   checks, all-or-nothing restore) → `state.repair` → the plan records a
+   completed `fix-plugin` step and continues with `start-dsh`/`verify`.
+   `disable-plugin` appends a `disabled: true` patch row instead.
+6. `restore-repair` reverses either repair (files from backups, or the profile
+   patch from its `.guard-disabled-<ts>` copy) and clears `state.repair`.
+
 ## Settings API
 
 Routes are registered with `ctx.webServer.register({kind:'exact', path})` under `/api/restart-guard/`:

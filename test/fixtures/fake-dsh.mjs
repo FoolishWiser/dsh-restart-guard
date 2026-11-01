@@ -15,6 +15,8 @@
  *   foreign       serve a generic 200 page (port taken by something else)
  *   silent        listen but never print the access line
  *   hang          accept TCP connections but never answer HTTP (a busy host)
+ *   plugin-broken bind + 401, print the real "Failed plugins" block and no
+ *                 access line until FAKE_DSH_CONFIG has {"enabled": true}
  */
 import fs from 'node:fs'
 import http from 'node:http'
@@ -73,6 +75,22 @@ const server = http.createServer((req, res) => {
 
 server.listen(port, '127.0.0.1', () => {
   if (mode === 'silent') return
+  if (mode === 'plugin-broken') {
+    /** @type {{ enabled?: boolean }} */
+    let config = {}
+    try {
+      config = JSON.parse(fs.readFileSync(process.env.FAKE_DSH_CONFIG || '', 'utf8'))
+    } catch {
+      config = {}
+    }
+    if (config.enabled !== true) {
+      const pkg = process.env.FAKE_DSH_PKG || 'dsh-demo-broken'
+      process.stdout.write(
+        `dsh: startup failed: 1 required plugin did not activate\n\nFailed plugins (1):\n  modules (required)\n    Package: ${pkg}\n    Error: ${pkg}: demo-config.json has enabled=false; set enabled to true\n`,
+      )
+      return
+    }
+  }
   console.log(`dsh web: http://127.0.0.1:${port}/?token=${token}`)
 })
 

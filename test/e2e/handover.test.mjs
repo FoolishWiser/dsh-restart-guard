@@ -62,6 +62,7 @@ test('a handing-over watcher clears the stop control it was asked to honour', { 
   await waitFor(() => !pidAlive(first.pid ?? 0), { timeoutMs: 20000, label: 'predecessor exits' })
 
   assert.equal(readControl(dir, 'stop'), null, 'the handover stop control is cleared, so the successor keeps running')
-  await new Promise((resolve) => setTimeout(resolve, 1500))
+  await new Promise((resolve) => setTimeout(resolve, 4000))
   assert.equal(pidAlive(second.pid ?? 0), true, 'successor is still alive after its first loop iterations')
+  assert.equal(readJson(lockPath, null)?.pid, second.pid, 'the successor still owns the lock')
 })
