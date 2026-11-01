@@ -1,3 +1,15 @@
+## [0.1.6] — 2026-11-01
+
+### Fixed
+
+- The log mirror no longer falls back to a hard-coded `/app/.dsh-web.log`.
+  It asks the live host for `/proc/<pid>/fd/1`, so a second instance started on
+  another port cannot append into the production container log.
+- `state.diagnostics.mirrorPath` is refreshed when the host changes instead of
+  being frozen at watcher start.
+- The AI repair briefing reports the boot log path the repair actually reads
+  instead of `log=unknown`.
+
 ## [0.1.5] — 2026-11-01
 
 ### Fixed
