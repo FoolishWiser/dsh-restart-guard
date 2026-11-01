@@ -83,3 +83,34 @@ dsh-restart-guard pause --minutes 30     # stop acting for a while
 dsh-restart-guard reload                 # re-read config.json
 dsh-restart-guard purge                  # remove all state (plugin stays installed)
 ```
+
+## The settings page says the drill failed (or nothing restarted)
+
+If `ALERT.md` says `refusing to kill pid ...: [defunct]` or `could not stop the
+stale holder`, the killed host was left as a **zombie**: its parent (PID 1 in
+many containers) never reaped it, so `kill -0` still succeeds while the process
+serves nothing. 0.1.5 and later treat that as gone and start a replacement.
+On older versions, restart the container and run the guard with an init:
+
+```yaml
+# docker compose
+services:
+  dsh:
+    init: true
+```
+
+```bash
+docker run --init ...
+```
+
+## Two watchers, duplicated log lines
+
+Up to 0.1.4 a hand-over could leave the predecessor running next to the
+successor. 0.1.5 addresses stop controls to one pid, leaves the predecessor's
+stop alone, and makes every watcher verify that it still owns `watcher.lock`
+(`lock-lost` in the log). If you see two `watcher.mjs` processes on an older
+version:
+
+```bash
+pkill -f 'lib/watcher.mjs --home'   # the host respawns exactly one
+```

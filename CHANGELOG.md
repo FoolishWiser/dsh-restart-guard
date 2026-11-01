@@ -1,3 +1,28 @@
+## [0.1.5] — 2026-11-01
+
+### Fixed
+
+- A killed host whose parent never reaps it (PID 1 in many containers) stays
+  as a zombie: `kill -0` still succeeds, so the guard called it "stalled",
+  tried to stop it, was refused because the cmdline is `[defunct]`, and gave up
+  in `manual` without ever starting a replacement. Zombies now count as gone
+  (`pidAlive` is false, `pidCmdline` is empty), the stalled verdict requires a
+  live `dsh web` process, and `kill-stale` is skipped instead of failing the
+  repair when there is nothing to kill.
+- The `simulate-crash` drill marks the stop it performs and restarts
+  immediately instead of waiting out the stalled timeout.
+- Two watchers could run at once after a hand-over: the successor cleared the
+  predecessor's stop before the predecessor read it. Stops are now addressed to
+  one pid, the successor leaves them alone, and every watcher checks that it
+  still owns `watcher.lock` (and exits as `lock-lost` when it does not). The
+  lock file is no longer deleted while its owner may still be writing it.
+- The host plugin spawns the watcher single-flight and verifies that the new
+  pid took over, so `ready` and the ten-second tick cannot spawn two.
+- The guard finds a mirror target in container layouts (`/app/.dsh-web.log`
+  fallback) and reports `log=unknown` instead of `log=?`.
+- `ALERT.md` is removed when an incident resolves successfully, so a drill that
+  recovered does not leave a stale "not responding" file behind.
+
 ## [0.1.4] — 2026-10-31
 
 ### Fixed

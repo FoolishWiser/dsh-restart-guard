@@ -39,7 +39,9 @@ The host starts the watcher with `spawn(node, [watcher.mjs, --home, --profile, -
 
 Supervision is detected (systemd/pm2 env markers, parent comm, PID 1, container cgroups) and can be overridden with `supervision.mode`: `none` forces "nobody else restarts DSH" (CI, or a container with a foreign init), `supervised` forces report-only.
 
-A single `watcher.lock` (O_EXCL) prevents two watchers for one instance. A live watcher with a different version is replaced (`--replace` → `control/stop` → 500 ms wait) so upgrades converge.
+A single `watcher.lock` (O_EXCL) prevents two watchers for one instance. A hand-over is addressed: the `stop` control carries `targetPid`, the successor leaves it for the predecessor to consume, and every watcher re-reads the lock each tick and exits (`lock-lost`) if another live pid owns it. An empty or half-written lock is retried, never deleted, so a slow writer cannot lose the lock to a competitor.
+
+Process liveness is zombie-aware: a `Z` entry in `/proc/<pid>/stat` counts as gone (no cmdline, no port, cannot be killed), which is what a SIGKILLed host becomes when PID 1 does not reap. A live watcher with a different version is replaced (`--replace` → `control/stop` → 500 ms wait) so upgrades converge.
 
 ## Health and readiness
 
