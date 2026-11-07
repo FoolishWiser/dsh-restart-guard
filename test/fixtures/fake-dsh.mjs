@@ -50,6 +50,9 @@ if (mode === 'fail-once') {
 }
 
 if (mode === 'hang') {
+  if (process.env.FAKE_DSH_ACCESS === '1') {
+    console.log(`dsh web: http://127.0.0.1:${port}/?token=${token}`)
+  }
   const sockets = new Set()
   const server = net.createServer((socket) => {
     sockets.add(socket)

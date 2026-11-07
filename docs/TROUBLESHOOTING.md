@@ -76,6 +76,34 @@ Check `health.error` in `state.json`:
 - `foreign` — the response is not DSH (for example a maintenance page). Fix or stop that server;
 - `ECONNREFUSED` — nothing is listening; the guard will repair after the grace.
 
+## The port answers 401 but HTTP hangs (auth gate / proxy plugin)
+
+Symptom: `curl -sS -m 5 http://127.0.0.1:3079/` times out while the port is
+open, and `restart-guard.log` alternates between `verify-failed timeout` and
+`EADDRINUSE`. A webServer plugin (for example `dsh-auth-gateway`) is
+intercepting `/` and never answering.
+
+Since 0.1.8 the guard classifies this as `http-hanging`: it sends one
+notification, keeps the process running and does **not** kill or restart it
+(`hangConfirmMs` controls how long it waits before deciding). Remove the plugin
+from the profile (`dsh plugin --profile <name> remove <pkg>`, and drop its
+bundle entry), then restart DSH yourself — or, on the next successful probe,
+the guard leaves the `manual` state on its own.
+
+Never "fix" this by letting the guard kill the listener: the next spawn cannot
+bind the port and the platform stays down longer than the plugin did.
+
+## The guard killed a healthy host and restarted into EADDRINUSE
+
+Before 0.1.8 the guard treated "TCP accepted, HTTP timed out" as an outage,
+killed the healthy process and then lost the race for the port. 0.1.8:
+
+- treats any non-foreign probe on a listening port as *up* (`health.error`
+  `slow`/`listening`), so a busy or wedged host is never restarted;
+- refuses `kill-stale` when the port still answers or is hanging;
+- writes a watcher heartbeat during the whole verify loop, and a replacement
+  watcher backs off instead of spawning on every tick.
+
 ## Resetting
 
 ```bash

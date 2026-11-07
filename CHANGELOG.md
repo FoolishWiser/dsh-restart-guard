@@ -1,3 +1,28 @@
+## [0.1.8] — 2026-11-07
+
+### Fixed
+
+- A web server plugin that intercepts `/` and never answers (for example an
+  auth gate) is no longer mistaken for a dead host. `verifyBoot` now returns
+  `http-hanging` after `watchdog.hangConfirmMs`; the repair ladder only
+  notifies, keeps the process alive and never starts a duplicate that dies with
+  `EADDRINUSE`.
+- `kill-stale` refuses to stop a process whose port still answers HTTP or
+  accepts TCP but hangs, so a healthy host is never killed during a partial
+  outage.
+- Any non-`foreign` probe on a listening port is treated as *up*
+  (`health.error: slow`/`listening`), so a wedged or busy host no longer
+  reaches `onUnhealthy`.
+- The watcher writes a heartbeat during the whole `verifyBoot` loop; the host
+  no longer mistakes a long repair for a dead watcher and spawns replacements
+  on every ten-second tick.
+- A watcher whose heartbeat goes stale can be taken over by a replacement
+  instead of leaving the instance without an owner forever.
+- `ensureWatcher` backs off for five minutes after three failed spawns, and
+  enforces a 15-second minimum interval between spawns.
+- A crash-loop pause is lifted automatically once the service has been healthy
+  for `watchdog.autoResumeAfterPauseMs`; an operator pause is still respected.
+
 ## [0.1.7] — 2026-11-01
 
 ### Added

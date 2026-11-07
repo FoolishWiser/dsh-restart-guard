@@ -132,3 +132,12 @@ test('planSummary is a one-liner', () => {
   const summary = planSummary(result)
   assert.equal(summary, 'start-dsh:pending -> verify:pending')
 })
+
+test('an HTTP hang never kills or restarts the server', () => {
+  const result = plan({ diagnosis: diagnosis('http-hanging') })
+  assert.equal(result.stopReason, 'http-hanging')
+  const actions = result.steps.map((step) => step.action)
+  assert.deepEqual(actions, ['notify', 'manual'])
+  assert.equal(actions.includes('kill-stale'), false)
+  assert.equal(actions.includes('start-dsh'), false)
+})

@@ -89,10 +89,11 @@ dsh-restart-guard logs -f     # 跟随守护日志
 | `crash` | `Segmentation fault`、`Killed` | 重启 |
 | `startup-failed` / `plugin-failed` | `entries did not activate`、`failed to apply loader entry` | 重启 |
 | `stalled` | 进程在、端口静默超过 `stalledExitMs` | 杀掉僵死进程再启动 |
+| `http-hanging` | 端口可连、`/` 但 HTTP 不返回（认证/代理插件挂起） | **只通知，不杀不重启** |
 | `timeout` | 超时未就绪 | 重启 |
 | `unknown` | 其它 | 重启 |
 
-每个事件都会写 `incidents/*.json`、`ALERT.md`、一行日志，并按配置发通知。**不自动修复**的情形：非 DSH 进程占着端口、维护窗口内、包树不完整、通配地址绑定、缺模块、权限/磁盘问题、以及开启尊重主动停止时的 `exit(0)`。
+每个事件都会写 `incidents/*.json`、`ALERT.md`、一行日志，并按配置发通知。**不自动修复**的情形：非 DSH 进程占着端口、维护窗口内、包树不完整、通配地址绑定、缺模块、权限/磁盘问题、开启尊重主动停止时的 `exit(0)`，以及**端口可连但 HTTP 挂起**（认证/代理插件把 `/` 挂住时，杀掉进程只会把“慢”变成“死”，守护只通知并在恢复后自动回到 monitoring）。
 
 ## AI 修复（可选，默认关闭）
 
@@ -124,10 +125,12 @@ dsh-restart-guard logs -f     # 跟随守护日志
     "bootTimeoutMs": 120000,
     "settleMs": 5000,
     "stalledExitMs": 20000,
+    "hangConfirmMs": 20000,
     "maxRestartAttempts": 2,
     "rollbackProfilePatch": true,
     "killStaleDshHolder": false,
     "respectIntentionalStop": true,
+    "autoResumeAfterPauseMs": 600000,
     "crashLoop": { "windowMs": 600000, "maxIncidents": 3, "pauseMs": 1800000 }
   },
   "maintenance": { "autoDetect": true, "graceMs": 900000, "lookbackMs": 1800000 },

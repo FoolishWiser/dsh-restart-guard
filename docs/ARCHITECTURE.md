@@ -138,3 +138,17 @@ Auth is a per-boot random token injected into the shell HTML through `tapIndex`;
 - Pure functions get unit tests (`paths`, `config`, `redact`, `diagnose`, `plan`, `maintenance`, `probe`, `doctor`, `install`, `ai`).
 - `test/fixtures/fake-dsh.mjs` impersonates `dsh web` in several modes (`ok`, `fail`, `fail-once`, `foreign`, `silent`, `hang`); `repair.js` and the watcher are exercised end-to-end against it, including readiness from byte offsets, patch rollback through a fake `--dump-config`, a SIGKILL repair cycle, the slow-host case and the maintenance stand-down.
 - `scripts/build-client.mjs --check` keeps the committed browser bundle honest.
+
+
+## Probe states (0.1.8)
+
+`GET 127.0.0.1:<port>/` is classified into four outcomes:
+
+- `dsh` — 401 with the DSH authentication text, or 200 with `__DSH_BOOT__`;
+- `foreign` — another page answers (maintenance page, unrelated server);
+- `hanging` — the socket accepts TCP but HTTP does not answer within the probe
+  deadline (an auth gate or proxy plugin intercepts `/`);
+- `down` — nothing accepts the connection.
+
+A `hanging` port is treated as *up*: the guard notifies once and never kills or
+restarts it. Only `down` reaches the stalled/kill path.

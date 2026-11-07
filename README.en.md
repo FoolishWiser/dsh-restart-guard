@@ -90,6 +90,7 @@ Probe fails → grace → diagnosis → plan:
 | `crash` | `Segmentation fault`, `Killed` | restart |
 | `startup-failed` / `plugin-failed` | `entries did not activate`, `failed to apply loader entry` | restart |
 | `stalled` | process alive, port silent past `stalledExitMs` | kill the stale holder, then start |
+| `http-hanging` | port accepts TCP but HTTP never answers (auth/proxy plugin) | **notify only — never kill or restart** |
 | `timeout` | boot did not finish in time | restart |
 | `unknown` | anything else | restart |
 
@@ -125,10 +126,12 @@ Global file: `$DSH_HOME/restart-guard/config.json` (mode 0600). Everything can b
     "bootTimeoutMs": 120000,
     "settleMs": 5000,
     "stalledExitMs": 20000,
+    "hangConfirmMs": 20000,
     "maxRestartAttempts": 2,
     "rollbackProfilePatch": true,
     "killStaleDshHolder": false,
     "respectIntentionalStop": true,
+    "autoResumeAfterPauseMs": 600000,
     "crashLoop": { "windowMs": 600000, "maxIncidents": 3, "pauseMs": 1800000 }
   },
   "maintenance": { "autoDetect": true, "graceMs": 900000, "lookbackMs": 1800000 },
