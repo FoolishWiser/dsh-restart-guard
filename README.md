@@ -90,6 +90,7 @@ dsh-restart-guard logs -f     # 跟随守护日志
 | `startup-failed` / `plugin-failed` | `entries did not activate`、`failed to apply loader entry` | 重启 |
 | `stalled` | 进程在、端口静默超过 `stalledExitMs` | 杀掉僵死进程再启动 |
 | `http-hanging` | 端口可连、`/` 但 HTTP 不返回（认证/代理插件挂起） | **只通知，不杀不重启** |
+| `gateway` | 入口端口返回登录页（302），DSH 核心在 `port+1/2` 上健康 | **视为健康**，记录 `health.corePort` |
 | `timeout` | 超时未就绪 | 重启 |
 | `unknown` | 其它 | 重启 |
 

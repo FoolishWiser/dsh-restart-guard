@@ -91,6 +91,7 @@ Probe fails → grace → diagnosis → plan:
 | `startup-failed` / `plugin-failed` | `entries did not activate`, `failed to apply loader entry` | restart |
 | `stalled` | process alive, port silent past `stalledExitMs` | kill the stale holder, then start |
 | `http-hanging` | port accepts TCP but HTTP never answers (auth/proxy plugin) | **notify only — never kill or restart** |
+| `gateway` | entry port serves a login page (302) and the DSH core answers on `port+1/2` | **healthy**, `health.corePort` is recorded |
 | `timeout` | boot did not finish in time | restart |
 | `unknown` | anything else | restart |
 

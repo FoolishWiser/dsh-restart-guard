@@ -94,6 +94,10 @@ server.listen(port, '127.0.0.1', () => {
       return
     }
   }
+  if (process.env.FAKE_DSH_WARN === '1') {
+    // An optional plugin failing to activate is a warning, not a dead boot.
+    process.stdout.write('dsh: warning: 1 entry did not activate\n  web-ui-task-board (@linxin666/dsh-client-ui-task-board): Error: ledger is already owned by process 1\n')
+  }
   console.log(`dsh web: http://127.0.0.1:${port}/?token=${token}`)
 })
 

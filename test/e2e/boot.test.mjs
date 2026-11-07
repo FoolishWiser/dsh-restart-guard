@@ -27,7 +27,7 @@ function watchdog(port) {
 }
 
 /**
- * @param {{ mode?: string, counter?: string }} [input]
+ * @param {{ mode?: string, counter?: string, env?: Record<string, string> }} [input]
  */
 async function fixture(input = {}) {
   const home = tmpHome()
@@ -44,6 +44,7 @@ async function fixture(input = {}) {
     counter: input.counter ?? '',
     binPath: tree.binPath,
     pkgRoot: tree.pkgRoot,
+    env: input.env ?? {},
   })
   const spec = loadLaunchSpec(dir)
   assert.ok(spec, 'launch spec written')
@@ -68,6 +69,26 @@ test('a healthy boot is verified from the access line of this attempt only', asy
     assert.equal(result.reason, 'ready')
     assert.match(fs.readFileSync(logPath, 'utf8'), /token=test-token-/)
     assert.doesNotMatch(fs.readFileSync(logPath, 'utf8').slice(spawn.offset), /stale-token/)
+  } finally {
+    spawn.child.kill('SIGTERM')
+  }
+})
+
+test('a warning about an optional plugin does not fail the boot', async () => {
+  const { port, logPath, spec } = await fixture({ env: { FAKE_DSH_WARN: '1' } })
+  const spawn = spawnDsh({ spec, logPath, port, attempt: 1 })
+  assert.equal(spawn.ok, true)
+  try {
+    const result = await verifyBoot({
+      child: spawn.child,
+      logPath,
+      offset: spawn.offset,
+      config: watchdog(port),
+      port,
+      startedAt: Date.now(),
+    })
+    assert.equal(result.ok, true, `${result.reason}: ${result.note}`)
+    assert.equal(result.reason, 'ready')
   } finally {
     spawn.child.kill('SIGTERM')
   }

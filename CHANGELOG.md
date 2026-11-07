@@ -1,3 +1,23 @@
+## [0.1.9] — 2026-11-07
+
+### Added
+
+- `probeDshStack()` probes the web *tier*: when the entry port answers but is
+  not DSH, the guard looks for the DSH core on `port + 1` / `port + 2` and
+  reports `kind: 'gateway'` with `health.corePort`. An authentication gateway
+  in front of the webserver is healthy, not a foreign listener.
+- The doctor shows a `gateway` check (`entry:port -> core:port`) when a gateway
+  is detected.
+
+### Fixed
+
+- `verifyBoot` no longer reports `foreign-listener` for a login page that a
+  gateway serves at `/`; it accepts the boot only when the DSH core answers.
+- `kill-stale` refuses to stop a host when the entry port is a healthy gateway
+  (`refusing to kill pid N: the port still answers HTTP (gateway ...)`).
+- A gateway that accepts TCP but stops answering (`kind: 'hanging'`) keeps the
+  host alive and is reported as `slow`/`listening` instead of being restarted.
+
 ## [0.1.8] — 2026-11-07
 
 ### Fixed

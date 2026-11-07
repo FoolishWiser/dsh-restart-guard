@@ -169,3 +169,19 @@ boot log this host actually writes.
 `demo/run.sh` (offline stub) or `demo/run.sh --real` runs the whole scenario on
 an isolated port; `--keep` leaves it running for inspection, `demo/stop.sh`
 cleans it up.
+
+## A gateway (login page) sits in front of DSH
+
+When `dsh-auth-gateway` (or any front end) owns the public port, only the
+gateway is reachable at `/`: unauthenticated requests get `302 /login`.
+Since 0.1.9 the watcher probes the tier with `probeDshStack()`: it looks for a
+DSH core on `port + 1` and `port + 2` and reports
+
+```json
+{"health": {"ok": true, "kind": "gateway", "corePort": 3081}}
+```
+
+Only when no DSH core answers does the widget report a foreign listener. The
+doctor shows the same information as a `gateway` check. If the gateway accepts
+TCP but stops answering, the host is *not* restarted (the probe is reported as
+`slow`/`listening`).

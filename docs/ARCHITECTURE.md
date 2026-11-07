@@ -146,6 +146,7 @@ Auth is a per-boot random token injected into the shell HTML through `tapIndex`;
 
 - `dsh` — 401 with the DSH authentication text, or 200 with `__DSH_BOOT__`;
 - `foreign` — another page answers (maintenance page, unrelated server);
+- `gateway` — the entry port is an auth/proxy front end; the DSH core answers on `port + 1` / `port + 2` (reported as healthy with `corePort`).
 - `hanging` — the socket accepts TCP but HTTP does not answer within the probe
   deadline (an auth gate or proxy plugin intercepts `/`);
 - `down` — nothing accepts the connection.
